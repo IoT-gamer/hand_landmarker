@@ -1,0 +1,14 @@
+source_path:
+  - android/src/main/kotlin
+
+android_sdk_config:
+  add_gradle_deps: true
+  android_example: example/
+
+classes:
+  - io.github.iot_gamer.hand_landmarker.MyHandLandmarker
+
+output:
+  dart:
+    path: lib/hand_landmarker_bindings.dart
+    structure: single_file
