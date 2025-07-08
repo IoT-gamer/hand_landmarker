@@ -3,7 +3,7 @@ description: A Flutter plugin for real-time hand landmark detection on Android u
 repository: https://github.com/IoT-gamer/hand_landmarker
 issue_tracker: https://github.com/IoT-gamer/hand_landmarker/issues
 homepage: https://github.com/IoT-gamer/hand_landmarker
-version: 1.0.0
+version: 2.0.0
 
 topics:
   - hand-tracking
