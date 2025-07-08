@@ -4,6 +4,7 @@ import android.content.Context
 import com.google.mediapipe.framework.image.ByteBufferImageBuilder
 import com.google.mediapipe.framework.image.MPImage
 import com.google.mediapipe.tasks.core.BaseOptions
+import com.google.mediapipe.tasks.core.Delegate
 import com.google.mediapipe.tasks.vision.core.ImageProcessingOptions
 import com.google.mediapipe.tasks.vision.handlandmarker.HandLandmarker
 import java.nio.ByteBuffer
@@ -15,6 +16,7 @@ class MyHandLandmarker(private val context: Context) {
     fun initialize() {
         val baseOptions = BaseOptions.builder()
             .setModelAssetPath("hand_landmarker.task")
+            .setDelegate(Delegate.GPU)
             .build()
         val options = HandLandmarker.HandLandmarkerOptions.builder()
             .setBaseOptions(baseOptions)
