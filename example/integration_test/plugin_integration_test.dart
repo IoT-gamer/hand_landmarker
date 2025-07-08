@@ -9,20 +9,20 @@ void main() {
   group('HandLandmarkerPlugin Integration Tests', () {
     testWidgets('Initializes and disposes the plugin without errors',
         (WidgetTester tester) async {
-      // ARRANGE: Create the plugin.
-      final plugin = await HandLandmarkerPlugin.create();
+      // ARRANGE: Create the plugin. This is now a synchronous call.
+      final plugin = HandLandmarkerPlugin.create();
       print('HandLandmarkerPlugin created successfully.');
-
-      // PUMP & SETTLE: Ensure all asynchronous initialization, especially for the
-      // background isolate, is fully complete before proceeding.
-      await tester.pumpAndSettle();
 
       // ASSERT: Confirm that the plugin object was created.
       expect(plugin, isNotNull);
 
-      // ACT: Dispose of the plugin and wait for it to complete.
-      await plugin.dispose();
+      // ACT: Dispose of the plugin. This is also synchronous.
+      plugin.dispose();
       print('HandLandmarkerPlugin disposed.');
+
+      // PUMP: Add a short pump to allow any pending microtasks to complete,
+      // although it's less critical now without the isolate.
+      await tester.pump();
     });
   });
 }

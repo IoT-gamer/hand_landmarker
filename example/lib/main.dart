@@ -42,6 +42,8 @@ class _HandTrackerViewState extends State<HandTrackerView> {
   List<Hand> _landmarks = [];
   // A flag to show a loading indicator while the camera and plugin are initializing.
   bool _isInitialized = false;
+  // A guard to prevent processing multiple frames at once.
+  bool _isDetecting = false;
 
   @override
   void initState() {
@@ -64,7 +66,7 @@ class _HandTrackerViewState extends State<HandTrackerView> {
     );
 
     // Create an instance of our plugin.
-    _plugin = await HandLandmarkerPlugin.create();
+    _plugin = HandLandmarkerPlugin.create();
 
     // Initialize the camera controller.
     await _controller!.initialize();
@@ -90,12 +92,13 @@ class _HandTrackerViewState extends State<HandTrackerView> {
   }
 
   Future<void> _processCameraImage(CameraImage image) async {
-    if (!_isInitialized || _plugin == null) return;
+    if (_isDetecting || !_isInitialized || _plugin == null) return;
+
+    _isDetecting = true;
 
     try {
-      // The core of the plugin: simply call detect() and get the results.
-      // All the complexity of isolates, image conversion, and JNI is hidden.
-      final hands = await _plugin!.detect(
+      // The detect method is now synchronous (not async).
+      final hands = _plugin!.detect(
         image,
         _controller!.description.sensorOrientation,
       );
@@ -106,6 +109,9 @@ class _HandTrackerViewState extends State<HandTrackerView> {
       }
     } catch (e) {
       debugPrint('Error detecting landmarks: $e');
+    } finally {
+      // Allow the next frame to be processed.
+      _isDetecting = false;
     }
   }
 

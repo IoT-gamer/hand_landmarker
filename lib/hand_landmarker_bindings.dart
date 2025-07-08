@@ -103,12 +103,12 @@ class MyHandLandmarker extends jni$_.JObject {
         .check();
   }
 
-  static final _id_detect = _class.instanceMethodId(
-    r'detect',
-    r'(Ljava/nio/ByteBuffer;III)Ljava/lang/String;',
+  static final _id_detectFromYuv = _class.instanceMethodId(
+    r'detectFromYuv',
+    r'(Ljava/nio/ByteBuffer;Ljava/nio/ByteBuffer;Ljava/nio/ByteBuffer;IIIIII)Ljava/lang/String;',
   );
 
-  static final _detect = jni$_.ProtectedJniExtensions.lookup<
+  static final _detectFromYuv = jni$_.ProtectedJniExtensions.lookup<
           jni$_.NativeFunction<
               jni$_.JniResult Function(
                   jni$_.Pointer<jni$_.Void>,
@@ -116,25 +116,57 @@ class MyHandLandmarker extends jni$_.JObject {
                   jni$_.VarArgs<
                       (
                         jni$_.Pointer<jni$_.Void>,
+                        jni$_.Pointer<jni$_.Void>,
+                        jni$_.Pointer<jni$_.Void>,
+                        jni$_.Int32,
+                        jni$_.Int32,
+                        jni$_.Int32,
                         jni$_.Int32,
                         jni$_.Int32,
                         jni$_.Int32
                       )>)>>('globalEnv_CallObjectMethod')
       .asFunction<
-          jni$_.JniResult Function(jni$_.Pointer<jni$_.Void>,
-              jni$_.JMethodIDPtr, jni$_.Pointer<jni$_.Void>, int, int, int)>();
+          jni$_.JniResult Function(
+              jni$_.Pointer<jni$_.Void>,
+              jni$_.JMethodIDPtr,
+              jni$_.Pointer<jni$_.Void>,
+              jni$_.Pointer<jni$_.Void>,
+              jni$_.Pointer<jni$_.Void>,
+              int,
+              int,
+              int,
+              int,
+              int,
+              int)>();
 
-  /// from: `public final java.lang.String detect(java.nio.ByteBuffer byteBuffer, int i, int i1, int i2)`
+  /// from: `public final java.lang.String detectFromYuv(java.nio.ByteBuffer byteBuffer, java.nio.ByteBuffer byteBuffer1, java.nio.ByteBuffer byteBuffer2, int i, int i1, int i2, int i3, int i4, int i5)`
   /// The returned object must be released after use, by calling the [release] method.
-  jni$_.JString detect(
+  jni$_.JString detectFromYuv(
     jni$_.JByteBuffer byteBuffer,
+    jni$_.JByteBuffer byteBuffer1,
+    jni$_.JByteBuffer byteBuffer2,
     int i,
     int i1,
     int i2,
+    int i3,
+    int i4,
+    int i5,
   ) {
     final _$byteBuffer = byteBuffer.reference;
-    return _detect(reference.pointer, _id_detect as jni$_.JMethodIDPtr,
-            _$byteBuffer.pointer, i, i1, i2)
+    final _$byteBuffer1 = byteBuffer1.reference;
+    final _$byteBuffer2 = byteBuffer2.reference;
+    return _detectFromYuv(
+            reference.pointer,
+            _id_detectFromYuv as jni$_.JMethodIDPtr,
+            _$byteBuffer.pointer,
+            _$byteBuffer1.pointer,
+            _$byteBuffer2.pointer,
+            i,
+            i1,
+            i2,
+            i3,
+            i4,
+            i5)
         .object<jni$_.JString>(const jni$_.JStringType());
   }
 }

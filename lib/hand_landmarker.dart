@@ -1,10 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:typed_data';
 
 import 'package:camera/camera.dart';
-import 'package:flutter/foundation.dart';
-import 'package:integral_isolates/integral_isolates.dart';
 import 'package:jni/jni.dart';
 
 // This is the auto-generated file from jnigen.
@@ -30,123 +27,69 @@ class Landmark {
   Landmark(this.x, this.y, this.z);
 }
 
-// --- Internal Implementation Details ---
-// These are kept private to the library by using a leading underscore.
-
-/// A data class to pass all necessary info to the background isolate.
-class _IsolateData {
-  final Uint8List yPlane;
-  final Uint8List uPlane;
-  final Uint8List vPlane;
-  final int yRowStride;
-  final int uvRowStride;
-  final int uvPixelStride;
-  final int width;
-  final int height;
-
-  _IsolateData(CameraImage image)
-      : yPlane = image.planes[0].bytes,
-        uPlane = image.planes[1].bytes,
-        vPlane = image.planes[2].bytes,
-        yRowStride = image.planes[0].bytesPerRow,
-        uvRowStride = image.planes[1].bytesPerRow,
-        uvPixelStride = image.planes[1].bytesPerPixel!,
-        height = image.height,
-        width = image.width;
-}
-
-/// This is the function that will run on the background isolate.
-/// It performs the heavy YUV to RGBA conversion.
-Uint8List _convertYUVtoRGBA(_IsolateData isolateData) {
-  // This conversion logic is taken directly from your implementation.
-  final int width = isolateData.width;
-  final int height = isolateData.height;
-  final int yRowStride = isolateData.yRowStride;
-  final int uvRowStride = isolateData.uvRowStride;
-  final int uvPixelStride = isolateData.uvPixelStride;
-
-  final yPlane = isolateData.yPlane;
-  final uPlane = isolateData.uPlane;
-  final vPlane = isolateData.vPlane;
-
-  final rgbaBytes = Uint8List(width * height * 4);
-  int writeIndex = 0;
-
-  for (int y = 0; y < height; y++) {
-    for (int x = 0; x < width; x++) {
-      final int uvIndex =
-          uvPixelStride * (x / 2).floor() + uvRowStride * (y / 2).floor();
-      final int index = y * yRowStride + x;
-
-      final yp = yPlane[index];
-      final up = uPlane[uvIndex];
-      final vp = vPlane[uvIndex];
-
-      int r = (yp + 1.402 * (vp - 128)).round();
-      int g = (yp - 0.344136 * (up - 128) - 0.714136 * (vp - 128)).round();
-      int blue = (yp + 1.772 * (up - 128)).round();
-
-      rgbaBytes[writeIndex++] = r.clamp(0, 255);
-      rgbaBytes[writeIndex++] = g.clamp(0, 255);
-      rgbaBytes[writeIndex++] = blue.clamp(0, 255);
-      rgbaBytes[writeIndex++] = 255;
-    }
-  }
-  return rgbaBytes;
-}
-
 /// The main class for the Hand Landmarker plugin.
 class HandLandmarkerPlugin {
   /// The underlying JNI-generated landmarker object.
   final MyHandLandmarker _landmarker;
 
-  /// The stateful isolate for background processing.
-  final StatefulIsolate _isolate;
-
-  /// Private constructor to force initialization via the async `create` method.
-  HandLandmarkerPlugin._(this._landmarker, this._isolate);
+  /// Private constructor to force initialization via the `create` method.
+  HandLandmarkerPlugin._(this._landmarker);
 
   /// Creates and initializes the Hand Landmarker.
   ///
-  /// This method must be called to create an instance of the plugin.
-  /// It handles JNI initialization and sets up the background isolate.
-  static Future<HandLandmarkerPlugin> create() async {
+  /// This method is now synchronous as it no longer sets up an isolate.
+  static HandLandmarkerPlugin create() {
     // Create the native MyHandLandmarker object.
     final contextRef = Jni.getCachedApplicationContext();
     final contextObj = JObject.fromReference(contextRef);
     final landmarker = MyHandLandmarker(contextObj);
     contextObj.release(); // Release the JObject wrapper.
 
-    // Initialize the stateful isolate.
-    final isolate = StatefulIsolate(
-      backpressureStrategy: ReplaceBackpressureStrategy(),
-    );
+    // Note: The native `initialize` method is called lazily on the first
+    // detection to ensure it runs on the correct thread.
 
-    return HandLandmarkerPlugin._(landmarker, isolate);
+    return HandLandmarkerPlugin._(landmarker);
   }
 
   /// Detects hand landmarks in a given [CameraImage].
   ///
-  /// Returns a list of detected [Hand]s.
-  Future<List<Hand>> detect(CameraImage image, int sensorOrientation) async {
-    // Run the conversion on the background isolate.
-    final rgbaBytes = await _isolate.compute(
-      _convertYUVtoRGBA,
-      _IsolateData(image),
-    );
+  /// This method is now synchronous and directly calls the native implementation.
+  /// It passes the raw YUV planes to avoid expensive conversion in Dart.
+  ///
+  /// IMPORTANT: This is a blocking call. Running it on the main isolate might
+  /// cause UI jank if the inference is slow. It's recommended to use this
+  /// with a mechanism (like a guard flag) that prevents processing every
+  /// single camera frame to avoid blocking the UI thread.
+  List<Hand> detect(CameraImage image, int sensorOrientation) {
+    // Get the Y, U, and V planes from the CameraImage.
+    final yPlane = image.planes[0];
+    final uPlane = image.planes[1];
+    final vPlane = image.planes[2];
 
-    // Pass the converted bytes to the native landmarker.
-    final byteBuffer = JByteBuffer.fromList(rgbaBytes);
-    final resultJString = _landmarker.detect(
-      byteBuffer,
+    // Create JNI-compatible ByteBuffers for each plane.
+    final yBuffer = JByteBuffer.fromList(yPlane.bytes);
+    final uBuffer = JByteBuffer.fromList(uPlane.bytes);
+    final vBuffer = JByteBuffer.fromList(vPlane.bytes);
+
+    // Call the new native method with all the required plane data.
+    // NOTE: The binding for this method needs to be regenerated.
+    final resultJString = _landmarker.detectFromYuv(
+      yBuffer,
+      uBuffer,
+      vBuffer,
       image.width,
       image.height,
+      yPlane.bytesPerRow,
+      uPlane.bytesPerRow,
+      uPlane.bytesPerPixel!,
       sensorOrientation,
-    ); //
+    );
     final resultString = resultJString.toDartString();
 
     // Release native resources as soon as possible.
-    byteBuffer.release();
+    yBuffer.release();
+    uBuffer.release();
+    vBuffer.release();
     resultJString.release();
 
     if (resultString.isEmpty || resultString == "[]") {
@@ -166,9 +109,8 @@ class HandLandmarkerPlugin {
     return hands;
   }
 
-  /// Releases all native and isolate resources.
-  Future<void> dispose() async {
+  /// Releases the native landmarker resources.
+  void dispose() {
     _landmarker.release();
-    await _isolate.dispose();
   }
 }
