@@ -14,7 +14,7 @@ This plugin provides a simple Dart API that hides the complexity of native code 
 * **High Performance**: Leverages the native Android MediaPipe library with **GPU acceleration** for highly performant ML inference. Image processing is handled efficiently on the native side to minimize Dart-Kotlin communication overhead.  
 * **Simple, Type-Safe API**: Provides clean Dart data models (Hand, Landmark) for the detection results.  
 * **Resource Management**: Includes a dispose() method to properly clean up all native resources.  
-* **Bundled Model**: The required hand_landmarker.task model is bundled with the plugin, so no manual setup is required.
+* **Bundled Model**: The required [hand_landmarker.task](https://ai.google.dev/edge/mediapipe/solutions/vision/hand_landmarker#models) model is bundled with the plugin, so no manual setup is required.
 
 ## How it Works
 
@@ -199,3 +199,8 @@ class Landmark {
 ## License
 
 This project is licensed under the MIT License - see the LICENSE file for details.
+
+## Acknowledgements
+
+* The [**`jni`**](https://pub.dev/packages/jni) and [**`jnigen`**](https://pub.dev/packages/jnigen) teams for making this Flutter-to-native communication possible.
+* The Google [**MediaPipe**](https://developers.google.com/mediapipe) team for providing the powerful hand landmark detection model.
