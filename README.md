@@ -38,7 +38,7 @@ The plugin follows a highly efficient architecture that minimizes cross-language
 Add the following dependencies to your app's pubspec.yaml file:
 
 dependencies:  
-  hand_landmarker: ^2.0.0 # Use the latest version
+  hand_landmarker: ^2.1.0 # Use the latest version
 
 Then, run flutter pub get.
 
