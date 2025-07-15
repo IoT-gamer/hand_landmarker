@@ -52,28 +52,26 @@ class _HandTrackerViewState extends State<HandTrackerView> {
   }
 
   Future<void> _initialize() async {
-    // Select the front camera.
     final camera = _cameras.firstWhere(
       (cam) => cam.lensDirection == CameraLensDirection.front,
       orElse: () => _cameras.first,
     );
-
-    // Create the camera controller.
     _controller = CameraController(
       camera,
       ResolutionPreset.medium,
       enableAudio: false,
     );
 
-    // Create an instance of our plugin.
-    _plugin = HandLandmarkerPlugin.create();
+    // Create an instance of our plugin with custom options.
+    _plugin = HandLandmarkerPlugin.create(
+      numHands: 2,
+      minHandDetectionConfidence: 0.7,
+      delegate: HandLandmarkerDelegate.GPU,
+    );
 
-    // Initialize the camera controller.
     await _controller!.initialize();
-    // Start the image stream.
     await _controller!.startImageStream(_processCameraImage);
 
-    // Update the UI to show the camera preview.
     if (mounted) {
       setState(() {
         _isInitialized = true;

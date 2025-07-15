@@ -82,24 +82,29 @@ class MyHandLandmarker extends jni$_.JObject {
 
   static final _id_initialize = _class.instanceMethodId(
     r'initialize',
-    r'()V',
+    r'(IFZ)V',
   );
 
   static final _initialize = jni$_.ProtectedJniExtensions.lookup<
-          jni$_.NativeFunction<
-              jni$_.JThrowablePtr Function(
-                jni$_.Pointer<jni$_.Void>,
-                jni$_.JMethodIDPtr,
-              )>>('globalEnv_CallVoidMethod')
+              jni$_.NativeFunction<
+                  jni$_.JThrowablePtr Function(
+                      jni$_.Pointer<jni$_.Void>,
+                      jni$_.JMethodIDPtr,
+                      jni$_
+                          .VarArgs<(jni$_.Int32, jni$_.Double, jni$_.Int32)>)>>(
+          'globalEnv_CallVoidMethod')
       .asFunction<
-          jni$_.JThrowablePtr Function(
-            jni$_.Pointer<jni$_.Void>,
-            jni$_.JMethodIDPtr,
-          )>();
+          jni$_.JThrowablePtr Function(jni$_.Pointer<jni$_.Void>,
+              jni$_.JMethodIDPtr, int, double, int)>();
 
-  /// from: `public final void initialize()`
-  void initialize() {
-    _initialize(reference.pointer, _id_initialize as jni$_.JMethodIDPtr)
+  /// from: `public final void initialize(int i, float f, boolean z)`
+  void initialize(
+    int i,
+    double f,
+    bool z,
+  ) {
+    _initialize(reference.pointer, _id_initialize as jni$_.JMethodIDPtr, i, f,
+            z ? 1 : 0)
         .check();
   }
 

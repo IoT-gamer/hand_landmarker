@@ -1,5 +1,4 @@
 import 'dart:convert';
-
 import 'package:camera/camera.dart';
 import 'package:jni/jni.dart';
 
@@ -7,8 +6,6 @@ import 'package:jni/jni.dart';
 import 'hand_landmarker_bindings.dart';
 
 // --- Public Data Models ---
-// These classes provide a clean, type-safe API for the plugin's results.
-
 /// A detected hand with its landmarks.
 class Hand {
   /// A list of 21 landmarks for the detected hand.
@@ -26,6 +23,11 @@ class Landmark {
   Landmark(this.x, this.y, this.z);
 }
 
+enum HandLandmarkerDelegate {
+  CPU,
+  GPU,
+}
+
 /// The main class for the Hand Landmarker plugin.
 class HandLandmarkerPlugin {
   /// The underlying JNI-generated landmarker object.
@@ -35,30 +37,28 @@ class HandLandmarkerPlugin {
   HandLandmarkerPlugin._(this._landmarker);
 
   /// Creates and initializes the Hand Landmarker.
-  ///
-  /// This method is now synchronous as it no longer sets up an isolate.
-  static HandLandmarkerPlugin create() {
+  static HandLandmarkerPlugin create({
+    int numHands = 2,
+    double minHandDetectionConfidence = 0.5,
+    HandLandmarkerDelegate delegate = HandLandmarkerDelegate.GPU,
+  }) {
     // Create the native MyHandLandmarker object.
     final contextRef = Jni.getCachedApplicationContext();
     final contextObj = JObject.fromReference(contextRef);
     final landmarker = MyHandLandmarker(contextObj);
     contextObj.release(); // Release the JObject wrapper.
 
-    // Note: The native `initialize` method is called lazily on the first
-    // detection to ensure it runs on the correct thread.
+    // Initialize the native landmarker with the provided options.
+    landmarker.initialize(
+      numHands,
+      minHandDetectionConfidence,
+      delegate == HandLandmarkerDelegate.GPU,
+    );
 
     return HandLandmarkerPlugin._(landmarker);
   }
 
   /// Detects hand landmarks in a given [CameraImage].
-  ///
-  /// This method is now synchronous and directly calls the native implementation.
-  /// It passes the raw YUV planes to avoid expensive conversion in Dart.
-  ///
-  /// IMPORTANT: This is a blocking call. Running it on the main isolate might
-  /// cause UI jank if the inference is slow. It's recommended to use this
-  /// with a mechanism (like a guard flag) that prevents processing every
-  /// single camera frame to avoid blocking the UI thread.
   List<Hand> detect(CameraImage image, int sensorOrientation) {
     // Get the Y, U, and V planes from the CameraImage.
     final yPlane = image.planes[0];
@@ -71,7 +71,6 @@ class HandLandmarkerPlugin {
     final vBuffer = JByteBuffer.fromList(vPlane.bytes);
 
     // Call the new native method with all the required plane data.
-    // NOTE: The binding for this method needs to be regenerated.
     final resultJString = _landmarker.detectFromYuv(
       yBuffer,
       uBuffer,

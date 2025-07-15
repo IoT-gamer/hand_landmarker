@@ -18,16 +18,21 @@ class MyHandLandmarker(private val context: Context) {
 
     private var handLandmarker: HandLandmarker? = null
 
-    fun initialize() {
+    fun initialize(
+        numHands: Int,
+        minHandDetectionConfidence: Float,
+        useGpu: Boolean
+    ) {
+        val delegate = if (useGpu) Delegate.GPU else Delegate.CPU
         val baseOptions = BaseOptions.builder()
             .setModelAssetPath("hand_landmarker.task")
-            .setDelegate(Delegate.GPU)
+            .setDelegate(delegate)
             .build()
         val options = HandLandmarker.HandLandmarkerOptions.builder()
             .setBaseOptions(baseOptions)
-            .setNumHands(2)
+            .setNumHands(numHands)
             .setRunningMode(com.google.mediapipe.tasks.vision.core.RunningMode.IMAGE)
-            .setMinHandDetectionConfidence(0.5f)
+            .setMinHandDetectionConfidence(minHandDetectionConfidence)
             .build()
         handLandmarker = HandLandmarker.createFromOptions(context, options)
     }
@@ -48,11 +53,11 @@ class MyHandLandmarker(private val context: Context) {
         rotation: Int
     ): String {
         if (handLandmarker == null) {
-            initialize()
+            // Default initialization if not already configured
+            initialize(2, 0.5f, true)
         }
 
         // 1. Convert YUV planes to a Bitmap.
-        // First, combine the Y, U, and V planes into a single NV21 formatted byte array.
         val yuvBytes = convertYuvToNv21(yBuffer, uBuffer, vBuffer, width, height, yRowStride, uvRowStride, uvPixelStride)
 
         // Create a YuvImage from the NV21 data.
@@ -85,7 +90,6 @@ class MyHandLandmarker(private val context: Context) {
         }
 
         // Build a JSON string of the landmarks
-        // Format: "[ [{"x": 0.1, "y": 0.2, "z": 0.3}, ...], ... ]"
         val handsJson = StringBuilder()
         handsJson.append("[")
         result.landmarks().forEachIndexed { handIndex, handLandmarks ->

@@ -11,7 +11,7 @@ This plugin provides a simple Dart API that hides the complexity of native code 
 ## Features
 
 * **Live Hand Tracking**: Performs real-time detection of hand landmarks from a CameraImage stream.  
-* **High Performance**: Leverages the native Android MediaPipe library with **GPU acceleration** for highly performant ML inference. Image processing is handled efficiently on the native side to minimize Dart-Kotlin communication overhead.  
+* **High Performance & Customizable**: Leverages the native Android MediaPipe library with a configurable **delegate (GPU or CPU)** for highly performant ML inference. You can also configure the number of hands to detect and the detection confidence. 
 * **Simple, Type-Safe API**: Provides clean Dart data models (Hand, Landmark) for the detection results.  
 * **Resource Management**: Includes a dispose() method to properly clean up all native resources.  
 * **Bundled Model**: The required [hand_landmarker.task](https://ai.google.dev/edge/mediapipe/solutions/vision/hand_landmarker#models) model is bundled with the plugin, so no manual setup is required.
@@ -90,8 +90,12 @@ class _HandTrackerViewState extends State<HandTrackerView> {
       enableAudio: false,  
     );
 
-    // Create an instance of our plugin (this is now synchronous).  
-    _plugin = HandLandmarkerPlugin.create();
+    // Create an instance of our plugin with custom options.
+    _plugin = HandLandmarkerPlugin.create(
+      numHands: 2, // The maximum number of hands to detect.
+      minHandDetectionConfidence: 0.7, // The minimum confidence score for detection.
+      delegate: HandLandmarkerDelegate.GPU, // The processing delegate (GPU or CPU).
+    );
 
     // Initialize the camera and start the image stream  
     await _controller!.initialize();  
