@@ -107,16 +107,42 @@ class _FrameRequest {
     required this.rotation,
   });
 
+  static _FrameRequest _fromRawPlanes({
+    required int id,
+    required Uint8List y,
+    required Uint8List u,
+    required Uint8List v,
+    required int width,
+    required int height,
+    required int yRowStride,
+    required int uvRowStride,
+    required int uvPixelStride,
+    required int rotation,
+  }) {
+    return _FrameRequest(
+      id: id,
+      y: Uint8List.fromList(y),
+      u: Uint8List.fromList(u),
+      v: Uint8List.fromList(v),
+      width: width,
+      height: height,
+      yRowStride: yRowStride,
+      uvRowStride: uvRowStride,
+      uvPixelStride: uvPixelStride,
+      rotation: rotation,
+    );
+  }
+
   static _FrameRequest fromCameraImage({
     required int id,
     required CameraImage image,
     required int sensorOrientation,
   }) {
-    return _FrameRequest(
+    return _FrameRequest._fromRawPlanes(
       id: id,
-      y: Uint8List.fromList(image.planes[0].bytes),
-      u: Uint8List.fromList(image.planes[1].bytes),
-      v: Uint8List.fromList(image.planes[2].bytes),
+      y: image.planes[0].bytes,
+      u: image.planes[1].bytes,
+      v: image.planes[2].bytes,
       width: image.width,
       height: image.height,
       yRowStride: image.planes[0].bytesPerRow,
@@ -138,6 +164,9 @@ class _FrameReply {
 
 class _Shutdown {}
 
+/// Sent by the worker after close()+release() to ack a clean shutdown.
+class _Closed {}
+
 // --- Worker isolate entry point ---
 
 void _workerEntry(_InitMsg msg) {
@@ -155,6 +184,8 @@ void _workerEntry(_InitMsg msg) {
     if (message is _Shutdown) {
       landmarker.close();
       landmarker.release();
+      // Ack shutdown before exiting so disposeAsync() can await it.
+      msg.replyPort.send(_Closed());
       Isolate.exit();
     }
     if (message is _FrameRequest) {
@@ -215,6 +246,9 @@ class HandLandmarkerPlugin {
   bool _disposed = false;
   int _nextRequestId = 0;
   final Map<int, Completer<List<Hand>>> _pendingRequests = {};
+
+  // Completer fulfilled when the worker sends _Closed; used by disposeAsync().
+  Completer<void>? _closedAck;
 
   /// Private constructor for sync instances.
   HandLandmarkerPlugin._(this._landmarker, this._conversionMode)
@@ -282,13 +316,15 @@ class HandLandmarkerPlugin {
     final isolate = await Isolate.spawn(_workerEntry, initMsg,
         debugName: 'HandLandmarkerWorker');
 
-    // Use a broadcast stream so we can await the ready handshake and then loop.
-    // The first message is the worker's SendPort; subsequent messages are _FrameReply.
     final readyCompleter = Completer<SendPort>();
     late HandLandmarkerPlugin plugin;
     recvPort.listen((message) {
       if (!readyCompleter.isCompleted && message is SendPort) {
         readyCompleter.complete(message);
+        return;
+      }
+      if (message is _Closed) {
+        plugin._closedAck?.complete();
         return;
       }
       if (message is _FrameReply) {
@@ -308,12 +344,12 @@ class HandLandmarkerPlugin {
   }
 
   /// Detects hand landmarks in a given [CameraImage] synchronously.
-  /// Throws [StateError] if called on an async instance or after dispose.
+  /// Throws [StateError] if called after dispose or on an async instance.
   List<Hand> detect(CameraImage image, int sensorOrientation) {
+    if (_disposed) throw StateError('HandLandmarkerPlugin has been disposed');
     if (_isAsync) {
       throw StateError('detect() called on async instance — use detectAsync()');
     }
-    if (_disposed) throw StateError('HandLandmarkerPlugin has been disposed');
 
     final (cm, jq) = _conversionMode!._params;
 
@@ -349,13 +385,13 @@ class HandLandmarkerPlugin {
   }
 
   /// Detects hand landmarks asynchronously on the worker isolate.
-  /// Throws [StateError] if called on a sync instance or after dispose.
+  /// Throws [StateError] if called after dispose or on a sync instance.
   Future<List<Hand>> detectAsync(CameraImage image, int sensorOrientation) {
+    if (_disposed) throw StateError('HandLandmarkerPlugin has been disposed');
     if (!_isAsync) {
       throw StateError(
           'detectAsync() called on sync instance — use detect()');
     }
-    if (_disposed) throw StateError('HandLandmarkerPlugin has been disposed');
 
     final id = _nextRequestId++;
     final completer = Completer<List<Hand>>();
@@ -384,9 +420,9 @@ class HandLandmarkerPlugin {
       }
       _pendingRequests.clear();
       _workerPort!.send(_Shutdown());
-      // Worker calls close()+release() then Isolate.exit().
-      // Close our port after a grace period so in-flight replies can drain.
-      Future.delayed(const Duration(milliseconds: 600), () {
+      // Worker sends _Closed ack then Isolate.exit().
+      // Close our port after 500ms so in-flight replies can drain (AC-8 budget).
+      Future.delayed(const Duration(milliseconds: 500), () {
         _recvPort!.close();
       });
     } else {
@@ -396,61 +432,62 @@ class HandLandmarkerPlugin {
   }
 
   /// Awaits full worker shutdown (async instances only).
+  /// Completes when the worker sends its [_Closed] ack, or after a 500ms fallback.
   Future<void> disposeAsync() async {
+    if (_disposed) return;
+    if (_isAsync) {
+      _closedAck = Completer<void>();
+    }
     dispose();
     if (_isAsync) {
-      await Future.delayed(const Duration(milliseconds: 600));
+      await _closedAck!.future.timeout(
+        const Duration(milliseconds: 500),
+        onTimeout: () {},
+      );
     }
   }
 }
 
-/// Test helper that exposes [_FrameRequest] construction for AC-7 field-type assertions.
-/// Not for use in production code.
+/// Builds a [_FrameRequest] payload from raw planes and metadata via the SAME
+/// extraction logic [detectAsync] uses, for AC-7 field-type assertions in host tests.
+/// Returns [id, y, u, v, width, height, yRowStride, uvRowStride, uvPixelStride, rotation].
 @visibleForTesting
-class FrameRequestTestHelper {
-  final int id;
-  final Uint8List y;
-  final Uint8List u;
-  final Uint8List v;
-  final int width;
-  final int height;
-  final int yRowStride;
-  final int uvRowStride;
-  final int uvPixelStride;
-  final int rotation;
-
-  FrameRequestTestHelper._({
-    required this.id,
-    required this.y,
-    required this.u,
-    required this.v,
-    required this.width,
-    required this.height,
-    required this.yRowStride,
-    required this.uvRowStride,
-    required this.uvPixelStride,
-    required this.rotation,
-  });
-
-  static FrameRequestTestHelper build({
-    required int id,
-    required Uint8List y,
-    required Uint8List u,
-    required Uint8List v,
-    required int width,
-    required int height,
-    required int yRowStride,
-    required int uvRowStride,
-    required int uvPixelStride,
-    required int rotation,
-  }) {
-    return FrameRequestTestHelper._(
-      id: id, y: y, u: u, v: v,
-      width: width, height: height,
-      yRowStride: yRowStride, uvRowStride: uvRowStride,
-      uvPixelStride: uvPixelStride, rotation: rotation,
-    );
-  }
+List<Object> frameRequestPayloadForTesting({
+  required int id,
+  required Uint8List y,
+  required Uint8List u,
+  required Uint8List v,
+  required int width,
+  required int height,
+  required int yRowStride,
+  required int uvRowStride,
+  required int uvPixelStride,
+  required int rotation,
+}) {
+  final req = _FrameRequest._fromRawPlanes(
+    id: id,
+    y: y,
+    u: u,
+    v: v,
+    width: width,
+    height: height,
+    yRowStride: yRowStride,
+    uvRowStride: uvRowStride,
+    uvPixelStride: uvPixelStride,
+    rotation: rotation,
+  );
+  return [
+    req.id,
+    req.y,
+    req.u,
+    req.v,
+    req.width,
+    req.height,
+    req.yRowStride,
+    req.uvRowStride,
+    req.uvPixelStride,
+    req.rotation,
+  ];
 }
 
 /// Exposed for unit testing — calls the real internal parse function.

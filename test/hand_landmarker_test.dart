@@ -1,11 +1,11 @@
 import 'dart:convert';
 import 'dart:typed_data';
 
+import 'package:camera/camera.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hand_landmarker/hand_landmarker.dart';
 
 // A helper function to replicate the parsing logic from the plugin.
-// This makes the tests self-contained and easy to understand.
 List<Hand> parseHandsFromJson(String jsonString) {
   if (jsonString.isEmpty) return [];
 
@@ -21,13 +21,27 @@ List<Hand> parseHandsFromJson(String jsonString) {
   }).toList();
 }
 
+/// Minimal [CameraImage] built from the deprecated Map-based constructor.
+/// Planes contain a single byte; valid enough to satisfy the type system.
+/// The disposed guard in detect()/detectAsync() fires before any plane data
+/// is accessed, so this stub is never dereferenced beyond the type check.
+// ignore: deprecated_member_use
+CameraImage _stubCameraImage() => CameraImage.fromPlatformData({
+      'format': 35, // ImageFormat.yuv_420_888 on Android
+      'height': 1,
+      'width': 1,
+      'planes': [
+        {'bytes': Uint8List(1), 'bytesPerRow': 1, 'bytesPerPixel': 1},
+        {'bytes': Uint8List(1), 'bytesPerRow': 1, 'bytesPerPixel': 1},
+        {'bytes': Uint8List(1), 'bytesPerRow': 1, 'bytesPerPixel': 1},
+      ],
+    });
+
 void main() {
   group('Hand Landmarker Unit Tests', () {
     group('Data Model Tests', () {
       test('Landmark class holds correct values', () {
-        // ARRANGE & ACT
         final landmark = Landmark(0.1, 0.2, 0.3);
-        // ASSERT
         expect(landmark.x, 0.1);
         expect(landmark.y, 0.2);
         expect(landmark.z, 0.3);
@@ -36,54 +50,34 @@ void main() {
 
     group('JSON Parsing Tests', () {
       test('Correctly parses a valid result with two hands', () {
-        // ARRANGE
         const jsonString =
             '[[{"x":0.1,"y":0.2,"z":0.3},{"x":0.4,"y":0.5,"z":0.6}],[{"x":0.7,"y":0.8,"z":0.9}]]';
 
-        // ACT
         final hands = parseHandsFromJson(jsonString);
 
-        // ASSERT
         expect(hands, isA<List<Hand>>());
-        expect(hands.length, 2); // Two hands
-        expect(hands[0].landmarks.length, 2); // First hand has 2 landmarks
-        expect(hands[1].landmarks.length, 1); // Second hand has 1 landmark
+        expect(hands.length, 2);
+        expect(hands[0].landmarks.length, 2);
+        expect(hands[1].landmarks.length, 1);
         expect(hands[0].landmarks[0].x, 0.1);
         expect(hands[0].landmarks[1].y, 0.5);
         expect(hands[1].landmarks[0].z, 0.9);
       });
 
       test('Returns an empty list for an empty JSON array string', () {
-        // ARRANGE
-        const jsonString = '[]';
-
-        // ACT
-        final hands = parseHandsFromJson(jsonString);
-
-        // ASSERT
+        final hands = parseHandsFromJson('[]');
         expect(hands, isA<List<Hand>>());
         expect(hands, isEmpty);
       });
 
       test('Returns an empty list for an empty string', () {
-        // ARRANGE
-        const jsonString = '';
-
-        // ACT
-        final hands = parseHandsFromJson(jsonString);
-
-        // ASSERT
+        final hands = parseHandsFromJson('');
         expect(hands, isA<List<Hand>>());
         expect(hands, isEmpty);
       });
 
       test('Throws a FormatException for invalid JSON', () {
-        // ARRANGE
-        const jsonString = 'not json';
-
-        // ACT & ASSERT
-        // We test the underlying jsonDecode behavior, not our helper.
-        expect(() => jsonDecode(jsonString), throwsA(isA<FormatException>()));
+        expect(() => jsonDecode('not json'), throwsA(isA<FormatException>()));
       });
     });
 
@@ -95,7 +89,6 @@ void main() {
       });
 
       test('ConversionMode.direct is the canonical const', () {
-        // Same reference (const) — no accidental allocation
         expect(identical(ConversionMode.direct, ConversionMode.direct), isTrue);
       });
 
@@ -113,23 +106,21 @@ void main() {
       });
 
       test('ConversionMode.direct maps to 0 — RED proof: changing to 1 would fail', () {
-        // Verify direct mode does NOT map to 1 (jpeg mode)
         final (cm, _) = ConversionMode.direct.paramsForTesting;
         expect(cm, isNot(equals(1)));
       });
     });
 
     group('_FrameRequest field type safety (AC-7)', () {
-      // Verifies that all fields of _FrameRequest are primitives or Uint8List —
+      // Verifies that every field produced by the REAL _FrameRequest construction
+      // path (the same code detectAsync uses) is an int or Uint8List —
       // no JNI handles (JObject, Pointer, MyHandLandmarker) cross the port.
-      test('_FrameRequest.fromCameraImage fields are all ints or Uint8List', () {
-        // Build a fake _FrameRequest by accessing its public test constructor.
-        // We use the internal builder seam to exercise real construction.
+      test('frameRequestPayloadForTesting fields are all int or Uint8List', () {
         final y = Uint8List.fromList(List.filled(640 * 480, 128));
         final u = Uint8List.fromList(List.filled(320 * 240, 128));
         final v = Uint8List.fromList(List.filled(320 * 240, 128));
 
-        final request = FrameRequestTestHelper.build(
+        final payload = frameRequestPayloadForTesting(
           id: 0,
           y: y,
           u: u,
@@ -142,29 +133,48 @@ void main() {
           rotation: 90,
         );
 
-        // Assert every field is int or Uint8List
-        expect(request.id, isA<int>());
-        expect(request.y, isA<Uint8List>());
-        expect(request.u, isA<Uint8List>());
-        expect(request.v, isA<Uint8List>());
-        expect(request.width, isA<int>());
-        expect(request.height, isA<int>());
-        expect(request.yRowStride, isA<int>());
-        expect(request.uvRowStride, isA<int>());
-        expect(request.uvPixelStride, isA<int>());
-        expect(request.rotation, isA<int>());
+        // payload = [id, y, u, v, width, height, yRowStride, uvRowStride, uvPixelStride, rotation]
+        expect(payload[0], isA<int>(),       reason: 'id must be int');
+        expect(payload[1], isA<Uint8List>(), reason: 'y must be Uint8List');
+        expect(payload[2], isA<Uint8List>(), reason: 'u must be Uint8List');
+        expect(payload[3], isA<Uint8List>(), reason: 'v must be Uint8List');
+        expect(payload[4], isA<int>(),       reason: 'width must be int');
+        expect(payload[5], isA<int>(),       reason: 'height must be int');
+        expect(payload[6], isA<int>(),       reason: 'yRowStride must be int');
+        expect(payload[7], isA<int>(),       reason: 'uvRowStride must be int');
+        expect(payload[8], isA<int>(),       reason: 'uvPixelStride must be int');
+        expect(payload[9], isA<int>(),       reason: 'rotation must be int');
+        expect(payload.length, equals(10),   reason: 'no extra fields should exist');
+      });
+
+      test('frameRequestPayloadForTesting preserves plane bytes and metadata faithfully', () {
+        final y = Uint8List.fromList([1, 2, 3]);
+        final u = Uint8List.fromList([4, 5]);
+        final v = Uint8List.fromList([6, 7]);
+
+        final payload = frameRequestPayloadForTesting(
+          id: 42,
+          y: y, u: u, v: v,
+          width: 4, height: 3,
+          yRowStride: 4, uvRowStride: 2, uvPixelStride: 1,
+          rotation: 270,
+        );
+
+        expect(payload[0], equals(42));
+        expect(payload[1], equals(y));
+        expect(payload[2], equals(u));
+        expect(payload[3], equals(v));
+        expect(payload[9], equals(270));
       });
     });
 
     group('Reply parsing via real parseHandsForTesting seam (AC-c)', () {
       test('parseHandsForTesting returns empty list for "[]"', () {
-        final result = parseHandsForTesting('[]');
-        expect(result, isEmpty);
+        expect(parseHandsForTesting('[]'), isEmpty);
       });
 
       test('parseHandsForTesting returns empty list for empty string', () {
-        final result = parseHandsForTesting('');
-        expect(result, isEmpty);
+        expect(parseHandsForTesting(''), isEmpty);
       });
 
       test('parseHandsForTesting parses a single hand with one landmark', () {
@@ -177,41 +187,49 @@ void main() {
         expect(result[0].landmarks[0].z, closeTo(0.7, 0.0001));
       });
 
-      // RED proof: "[]" must not return non-empty
       test('parseHandsForTesting "[]" does NOT return non-empty — RED proof', () {
-        final result = parseHandsForTesting('[]');
-        expect(result, isEmpty);
+        expect(parseHandsForTesting('[]'), isEmpty);
       });
     });
 
     group('Dispose state guard (AC-d)', () {
       test('disposedForTesting() instance has _disposed=true', () {
-        // The @visibleForTesting factory pre-sets the disposed flag.
-        // This directly asserts the discriminator the guards rely on.
         final plugin = HandLandmarkerPlugin.disposedForTesting();
         expect(plugin.isDisposedForTesting, isTrue);
       });
 
       test('dispose() on already-disposed instance is a no-op (idempotent)', () {
-        // After dispose() the flag is true; a second call must not throw.
-        // This proves the guard is live: if _disposed were not checked in
-        // dispose(), the second call would attempt null-deref and crash.
         final plugin = HandLandmarkerPlugin.disposedForTesting();
         expect(() => plugin.dispose(), returnsNormally);
       });
 
-      // RED proof: a freshly constructed (non-disposed) instance must NOT
-      // report isDisposed=true, proving the factory actually sets the flag.
+      // The _disposed guard fires BEFORE any JNI access, so it is reachable
+      // on the host without a live JNI/isolate instance.
+      test('detect() on disposed instance throws StateError', () {
+        final plugin = HandLandmarkerPlugin.disposedForTesting();
+        expect(
+          () => plugin.detect(_stubCameraImage(), 90),
+          throwsA(isA<StateError>().having(
+            (e) => e.message, 'message', contains('disposed'),
+          )),
+        );
+      });
+
+      // detectAsync() guard also fires before any isolate/port access.
+      test('detectAsync() on disposed instance throws StateError', () {
+        final plugin = HandLandmarkerPlugin.disposedForTesting();
+        expect(
+          () => plugin.detectAsync(_stubCameraImage(), 90),
+          throwsA(isA<StateError>().having(
+            (e) => e.message, 'message', contains('disposed'),
+          )),
+        );
+      });
+
       test('RED proof: non-disposed instance has _disposed=false', () {
-        // We cannot call create() without JNI, so we verify via the factory
-        // that the disposed sentinel is distinct from a default-constructed state.
         final disposed = HandLandmarkerPlugin.disposedForTesting();
-        // The disposed instance IS disposed; the flag is not some default-true.
-        // Verify the flag differs from what a 'fresh' instance would look like
-        // by checking it is strictly true (not some unexpected state).
         expect(disposed.isDisposedForTesting, equals(true),
             reason: 'disposedForTesting must set _disposed=true');
-        // If the factory failed to set the flag, this would be false — RED.
       });
     });
   });
