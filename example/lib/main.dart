@@ -42,7 +42,7 @@ class _HandTrackerViewState extends State<HandTrackerView> {
   List<Hand> _landmarks = [];
   // A flag to show a loading indicator while the camera and plugin are initializing.
   bool _isInitialized = false;
-  // A guard to prevent processing multiple frames at once.
+  // A guard to prevent unbounded Completer accumulation at 30fps.
   bool _isDetecting = false;
 
   @override
@@ -62,8 +62,8 @@ class _HandTrackerViewState extends State<HandTrackerView> {
       enableAudio: false,
     );
 
-    // Create an instance of our plugin with custom options.
-    _plugin = HandLandmarkerPlugin.create(
+    // Create an async instance that runs JNI on a worker isolate.
+    _plugin = await HandLandmarkerPlugin.createAsync(
       numHands: 2,
       minHandDetectionConfidence: 0.7,
       delegate: HandLandmarkerDelegate.gpu,
@@ -95,8 +95,7 @@ class _HandTrackerViewState extends State<HandTrackerView> {
     _isDetecting = true;
 
     try {
-      // The detect method is now synchronous (not async).
-      final hands = _plugin!.detect(
+      final hands = await _plugin!.detectAsync(
         image,
         _controller!.description.sensorOrientation,
       );
