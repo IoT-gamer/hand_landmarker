@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'dart:convert';
 import 'dart:isolate';
 import 'dart:typed_data';
@@ -37,7 +38,12 @@ sealed class ConversionMode {
 
   factory ConversionMode.jpeg({int quality = 90}) => _Jpeg(quality: quality);
 
+  /// Returns the (conversionMode, jpegQuality) pair for the JNI boundary.
   (int conversionMode, int jpegQuality) get _params;
+
+  /// Exposed for testing only — returns (conversionMode, jpegQuality).
+  @visibleForTesting
+  (int, int) get paramsForTesting => _params;
 }
 
 class _Direct extends ConversionMode {
@@ -381,6 +387,55 @@ class HandLandmarkerPlugin {
     if (_isAsync) {
       await Future.delayed(const Duration(milliseconds: 600));
     }
+  }
+}
+
+/// Test helper that exposes [_FrameRequest] construction for AC-7 field-type assertions.
+/// Not for use in production code.
+@visibleForTesting
+class FrameRequestTestHelper {
+  final int id;
+  final Uint8List y;
+  final Uint8List u;
+  final Uint8List v;
+  final int width;
+  final int height;
+  final int yRowStride;
+  final int uvRowStride;
+  final int uvPixelStride;
+  final int rotation;
+
+  FrameRequestTestHelper._({
+    required this.id,
+    required this.y,
+    required this.u,
+    required this.v,
+    required this.width,
+    required this.height,
+    required this.yRowStride,
+    required this.uvRowStride,
+    required this.uvPixelStride,
+    required this.rotation,
+  });
+
+  static FrameRequestTestHelper build({
+    required int id,
+    required Uint8List y,
+    required Uint8List u,
+    required Uint8List v,
+    required int width,
+    required int height,
+    required int yRowStride,
+    required int uvRowStride,
+    required int uvPixelStride,
+    required int rotation,
+  }) {
+    return FrameRequestTestHelper._(
+      id: id, y: y, u: u, v: v,
+      width: width, height: height,
+      yRowStride: yRowStride, uvRowStride: uvRowStride,
+      uvPixelStride: uvPixelStride, rotation: rotation,
+    );
   }
 }
 

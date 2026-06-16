@@ -12,8 +12,10 @@ This plugin provides a simple Dart API that hides the complexity of native code 
 
 * **Live Hand Tracking**: Performs real-time detection of hand landmarks from a CameraImage stream.  
 * **High Performance & Customizable**: Leverages the native Android MediaPipe library with a configurable **delegate (GPU or CPU)** for highly performant ML inference. You can also configure the number of hands to detect and the detection confidence. 
+* **Configurable Conversion Mode**: Choose between `ConversionMode.direct` (default, ~3–8 ms faster per frame — skips JPEG round-trip) or `ConversionMode.jpeg(quality: q)` for the legacy JPEG encode/decode path.
+* **Non-blocking Async Detection**: Use `createAsync()` and `detectAsync()` to run inference on a dedicated worker isolate, keeping the main thread free.
 * **Simple, Type-Safe API**: Provides clean Dart data models (Hand, Landmark) for the detection results.  
-* **Resource Management**: Includes a dispose() method to properly clean up all native resources.  
+* **Resource Management**: Includes a `dispose()` method to properly clean up all native resources (including the native MediaPipe handle).  
 * **Bundled Model**: The required [hand_landmarker.task](https://ai.google.dev/edge/mediapipe/solutions/vision/hand_landmarker#models) model is bundled with the plugin, so no manual setup is required.
 
 ## How it Works
@@ -40,7 +42,7 @@ Add the following dependencies to your app's pubspec.yaml file:
 
 ```yaml
 dependencies:  
-  hand_landmarker: ^2.2.0 # Use the latest version
+  hand_landmarker: ^2.3.0 # Use the latest version
 ```
 
 Then, run `flutter pub get`.
@@ -175,6 +177,74 @@ You can now use the `_landmarks` list in a `CustomPainter` to draw the results o
   }  
 }
 ```
+
+## Conversion Mode
+
+`ConversionMode` controls how YUV camera frames are converted to a bitmap before MediaPipe inference.
+
+| Mode | Description |
+|------|-------------|
+| `ConversionMode.direct` (default) | Direct NV21→ARGB pixel conversion. No JPEG encode/decode. ~3–8 ms faster per frame. |
+| `ConversionMode.jpeg(quality: q)` | Encode NV21 to JPEG at quality `q` (1–100), then decode. Legacy behavior. |
+
+```dart
+// Default (direct, no JPEG):
+final plugin = HandLandmarkerPlugin.create();
+
+// Explicit direct:
+final plugin = HandLandmarkerPlugin.create(
+  conversionMode: ConversionMode.direct,
+);
+
+// JPEG path at quality 85:
+final plugin = HandLandmarkerPlugin.create(
+  conversionMode: ConversionMode.jpeg(quality: 85),
+);
+```
+
+The same `conversionMode` parameter is available on `createAsync()`.
+
+## Async Detection (Worker Isolate)
+
+`createAsync()` spawns a dedicated Dart isolate that owns the native MediaPipe model. Calling `detectAsync()` sends a frame to the worker and awaits the result, without blocking the main isolate.
+
+```dart
+Future<void> _initialize() async {
+  _plugin = await HandLandmarkerPlugin.createAsync(
+    numHands: 2,
+    minHandDetectionConfidence: 0.7,
+    delegate: HandLandmarkerDelegate.gpu,
+    // conversionMode defaults to ConversionMode.direct
+  );
+  // ...
+}
+
+Future<void> _processCameraImage(CameraImage image) async {
+  if (_isDetecting || _plugin == null) return;
+  _isDetecting = true;
+  try {
+    final hands = await _plugin!.detectAsync(
+      image,
+      _controller!.description.sensorOrientation,
+    );
+    setState(() => _landmarks = hands);
+  } finally {
+    _isDetecting = false;
+  }
+}
+
+@override
+void dispose() {
+  _plugin?.dispose(); // signals worker to shut down gracefully
+  super.dispose();
+}
+```
+
+**Notes:**
+- Only `Uint8List` and `int` primitives cross the isolate port — no JNI handles.
+- `dispose()` is synchronous (backward-compatible). Use `disposeAsync()` if you need to await full worker shutdown.
+- Using `create()` and `createAsync()` simultaneously loads two native model instances (each owns its own handle).
+- Calling `detect()` on an async instance (or `detectAsync()` on a sync instance) throws `StateError`.
 
 ## Data Models
 

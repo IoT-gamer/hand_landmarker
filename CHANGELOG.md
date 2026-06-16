@@ -2,6 +2,23 @@
 
 All notable changes to this project will be documented in this file.
 
+## **2.3.0 - 2026-06-16**
+
+### **Features**
+
+* **Configurable image conversion mode** (`ConversionMode`): choose between the new `ConversionMode.direct` (default) — a direct NV21→ARGB pixel-by-pixel conversion that skips the per-frame JPEG encode/decode (~3–8 ms saved per frame) — or `ConversionMode.jpeg(quality: q)` to retain the previous JPEG round-trip path. `sync detect()` and `createAsync()` both default to `direct`.
+* **Async detection via worker isolate** (`createAsync` / `detectAsync`): `HandLandmarkerPlugin.createAsync(...)` spawns a dedicated Dart isolate that owns the native MediaPipe handle. `detectAsync(CameraImage, int)` offloads the blocking JNI call to the worker, keeping the main isolate free. Only `Uint8List` and `int` primitives cross the isolate port boundary (no JNI handles). The worker shuts down gracefully on `dispose()`, draining any in-flight detection before exiting.
+* **`disposeAsync()`**: optional async dispose that awaits worker shutdown completion.
+
+### **Bug Fixes**
+
+* **Native handle leak fixed**: `HandLandmarker.close()` is now called on dispose (both sync and async paths), preventing MediaPipe native resource leaks that existed in prior versions.
+
+### **Notes**
+
+* Sync `detect()` / `create()` signatures are unchanged — this release is fully backward-compatible.
+* Using both `create()` and `createAsync()` simultaneously loads two native model instances (expected behavior; each instance owns its own handle).
+
 ## **2.2.0 - 2025-12-13**
 
 ### **💥 Breaking Changes**

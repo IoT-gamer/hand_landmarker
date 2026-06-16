@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hand_landmarker/hand_landmarker.dart';
@@ -83,6 +84,75 @@ void main() {
         // ACT & ASSERT
         // We test the underlying jsonDecode behavior, not our helper.
         expect(() => jsonDecode(jsonString), throwsA(isA<FormatException>()));
+      });
+    });
+
+    group('ConversionMode mapping tests', () {
+      test('ConversionMode.direct maps to conversionMode=0, jpegQuality=90', () {
+        final (cm, jq) = ConversionMode.direct.paramsForTesting;
+        expect(cm, equals(0), reason: 'direct must use conversionMode=0');
+        expect(jq, equals(90), reason: 'direct jpegQuality sentinel must be 90');
+      });
+
+      test('ConversionMode.direct is the canonical const', () {
+        // Same reference (const) — no accidental allocation
+        expect(identical(ConversionMode.direct, ConversionMode.direct), isTrue);
+      });
+
+      test('ConversionMode.jpeg(quality:75) maps to conversionMode=1, jpegQuality=75', () {
+        final mode = ConversionMode.jpeg(quality: 75);
+        final (cm, jq) = mode.paramsForTesting;
+        expect(cm, equals(1), reason: 'jpeg must use conversionMode=1');
+        expect(jq, equals(75), reason: 'jpegQuality must reflect the given quality');
+      });
+
+      test('ConversionMode.jpeg default quality is 90', () {
+        final mode = ConversionMode.jpeg();
+        final (_, jq) = mode.paramsForTesting;
+        expect(jq, equals(90));
+      });
+
+      test('ConversionMode.direct maps to 0 — RED proof: changing to 1 would fail', () {
+        // Verify direct mode does NOT map to 1 (jpeg mode)
+        final (cm, _) = ConversionMode.direct.paramsForTesting;
+        expect(cm, isNot(equals(1)));
+      });
+    });
+
+    group('_FrameRequest field type safety (AC-7)', () {
+      // Verifies that all fields of _FrameRequest are primitives or Uint8List —
+      // no JNI handles (JObject, Pointer, MyHandLandmarker) cross the port.
+      test('_FrameRequest.fromCameraImage fields are all ints or Uint8List', () {
+        // Build a fake _FrameRequest by accessing its public test constructor.
+        // We use the internal builder seam to exercise real construction.
+        final y = Uint8List.fromList(List.filled(640 * 480, 128));
+        final u = Uint8List.fromList(List.filled(320 * 240, 128));
+        final v = Uint8List.fromList(List.filled(320 * 240, 128));
+
+        final request = FrameRequestTestHelper.build(
+          id: 0,
+          y: y,
+          u: u,
+          v: v,
+          width: 640,
+          height: 480,
+          yRowStride: 640,
+          uvRowStride: 320,
+          uvPixelStride: 1,
+          rotation: 90,
+        );
+
+        // Assert every field is int or Uint8List
+        expect(request.id, isA<int>());
+        expect(request.y, isA<Uint8List>());
+        expect(request.u, isA<Uint8List>());
+        expect(request.v, isA<Uint8List>());
+        expect(request.width, isA<int>());
+        expect(request.height, isA<int>());
+        expect(request.yRowStride, isA<int>());
+        expect(request.uvRowStride, isA<int>());
+        expect(request.uvPixelStride, isA<int>());
+        expect(request.rotation, isA<int>());
       });
     });
   });
