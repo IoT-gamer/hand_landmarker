@@ -111,9 +111,29 @@ class MyHandLandmarker extends jni$_.JObject {
         .check();
   }
 
+  static final _id_close = _class.instanceMethodId(
+    r'close',
+    r'()V',
+  );
+
+  static final _close = jni$_.ProtectedJniExtensions.lookup<
+          jni$_.NativeFunction<
+              jni$_.JThrowablePtr Function(
+                jni$_.Pointer<jni$_.Void>,
+                jni$_.JMethodIDPtr,
+              )>>('globalEnv_CallVoidMethod')
+      .asFunction<
+          jni$_.JThrowablePtr Function(
+              jni$_.Pointer<jni$_.Void>, jni$_.JMethodIDPtr)>();
+
+  /// from: `public fun close(): kotlin.Unit`
+  void close() {
+    _close(reference.pointer, _id_close as jni$_.JMethodIDPtr).check();
+  }
+
   static final _id_detectFromYuv = _class.instanceMethodId(
     r'detectFromYuv',
-    r'(Ljava/nio/ByteBuffer;Ljava/nio/ByteBuffer;Ljava/nio/ByteBuffer;IIIIII)Ljava/lang/String;',
+    r'(Ljava/nio/ByteBuffer;Ljava/nio/ByteBuffer;Ljava/nio/ByteBuffer;IIIIIIII)Ljava/lang/String;',
   );
 
   static final _detectFromYuv = jni$_.ProtectedJniExtensions.lookup<
@@ -126,6 +146,8 @@ class MyHandLandmarker extends jni$_.JObject {
                         jni$_.Pointer<jni$_.Void>,
                         jni$_.Pointer<jni$_.Void>,
                         jni$_.Pointer<jni$_.Void>,
+                        jni$_.Int32,
+                        jni$_.Int32,
                         jni$_.Int32,
                         jni$_.Int32,
                         jni$_.Int32,
@@ -145,9 +167,11 @@ class MyHandLandmarker extends jni$_.JObject {
               int,
               int,
               int,
+              int,
+              int,
               int)>();
 
-  /// from: `public fun detectFromYuv(yBuffer: java.nio.ByteBuffer, uBuffer: java.nio.ByteBuffer, vBuffer: java.nio.ByteBuffer, width: kotlin.Int, height: kotlin.Int, yRowStride: kotlin.Int, uvRowStride: kotlin.Int, uvPixelStride: kotlin.Int, rotation: kotlin.Int): kotlin.String`
+  /// from: `public fun detectFromYuv(yBuffer: java.nio.ByteBuffer, uBuffer: java.nio.ByteBuffer, vBuffer: java.nio.ByteBuffer, width: kotlin.Int, height: kotlin.Int, yRowStride: kotlin.Int, uvRowStride: kotlin.Int, uvPixelStride: kotlin.Int, rotation: kotlin.Int, conversionMode: kotlin.Int, jpegQuality: kotlin.Int): kotlin.String`
   /// The returned object must be released after use, by calling the [release] method.
   jni$_.JString detectFromYuv(
     jni$_.JByteBuffer byteBuffer,
@@ -159,6 +183,8 @@ class MyHandLandmarker extends jni$_.JObject {
     int i3,
     int i4,
     int i5,
+    int i6,
+    int i7,
   ) {
     final _$byteBuffer = byteBuffer.reference;
     final _$byteBuffer1 = byteBuffer1.reference;
@@ -174,7 +200,9 @@ class MyHandLandmarker extends jni$_.JObject {
             i2,
             i3,
             i4,
-            i5)
+            i5,
+            i6,
+            i7)
         .object<jni$_.JString>(const jni$_.$JString$Type$());
   }
 }
