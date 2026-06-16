@@ -229,6 +229,20 @@ class HandLandmarkerPlugin {
 
   bool get _isAsync => _isolate != null;
 
+  /// Creates a stub instance with [_disposed] pre-set to true, for use in unit
+  /// tests asserting post-dispose [StateError] guards without a live JNI/isolate.
+  @visibleForTesting
+  factory HandLandmarkerPlugin.disposedForTesting() {
+    final inst = HandLandmarkerPlugin._(null, null);
+    inst._disposed = true;
+    return inst;
+  }
+
+  /// Returns true if this instance has been disposed.
+  /// Exposed for unit testing the dispose state guard without invoking JNI.
+  @visibleForTesting
+  bool get isDisposedForTesting => _disposed;
+
   /// Creates and initializes the Hand Landmarker (sync, blocking on the calling thread).
   static HandLandmarkerPlugin create({
     int numHands = 2,
@@ -438,6 +452,10 @@ class FrameRequestTestHelper {
     );
   }
 }
+
+/// Exposed for unit testing — calls the real internal parse function.
+@visibleForTesting
+List<Hand> parseHandsForTesting(String resultString) => _parseHands(resultString);
 
 List<Hand> _parseHands(String resultString) {
   if (resultString.isEmpty || resultString == '[]') return [];
