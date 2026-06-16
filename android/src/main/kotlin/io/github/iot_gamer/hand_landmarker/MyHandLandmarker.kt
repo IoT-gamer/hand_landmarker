@@ -37,9 +37,38 @@ class MyHandLandmarker(private val context: Context) {
         handLandmarker = HandLandmarker.createFromOptions(context, options)
     }
 
+    fun close() {
+        handLandmarker?.close()
+        handLandmarker = null
+    }
+
+    private fun nv21ToArgbBitmap(nv21: ByteArray, width: Int, height: Int): Bitmap {
+        val argb = IntArray(width * height)
+        val frameSize = width * height
+        for (j in 0 until height) {
+            for (i in 0 until width) {
+                val yIdx = j * width + i
+                // NV21: UV interleaved after Y plane; each UV pair covers 2x2 block
+                // NV21 order is V then U
+                val uvIdx = frameSize + (j / 2) * width + (i and 1.inv())
+                val yy = nv21[yIdx].toInt() and 0xFF
+                val vv = (nv21[uvIdx].toInt() and 0xFF) - 128
+                val uu = (nv21[uvIdx + 1].toInt() and 0xFF) - 128
+                var r = yy + (1.402f * vv).toInt()
+                var g = yy - (0.344136f * uu).toInt() - (0.714136f * vv).toInt()
+                var b = yy + (1.772f * uu).toInt()
+                r = r.coerceIn(0, 255)
+                g = g.coerceIn(0, 255)
+                b = b.coerceIn(0, 255)
+                argb[yIdx] = (0xFF000000.toInt()) or (r shl 16) or (g shl 8) or b
+            }
+        }
+        return Bitmap.createBitmap(argb, width, height, Bitmap.Config.ARGB_8888)
+    }
+
     /**
      * Detects hand landmarks from YUV image planes.
-     * This method is more efficient as it avoids YUV->RGBA conversion in Dart.
+     * conversionMode: 0 = direct NV21->ARGB (no JPEG round-trip), 1 = JPEG encode/decode path.
      */
     fun detectFromYuv(
         yBuffer: ByteBuffer,
@@ -50,26 +79,26 @@ class MyHandLandmarker(private val context: Context) {
         yRowStride: Int,
         uvRowStride: Int,
         uvPixelStride: Int,
-        rotation: Int
+        rotation: Int,
+        conversionMode: Int,
+        jpegQuality: Int
     ): String {
         if (handLandmarker == null) {
-            // Default initialization if not already configured
             initialize(2, 0.5f, true)
         }
 
-        // 1. Convert YUV planes to a Bitmap.
         val yuvBytes = convertYuvToNv21(yBuffer, uBuffer, vBuffer, width, height, yRowStride, uvRowStride, uvPixelStride)
 
-        // Create a YuvImage from the NV21 data.
-        val yuvImage = YuvImage(yuvBytes, ImageFormat.NV21, width, height, null)
-
-        // Create a ByteArrayOutputStream and compress the YuvImage to a JPEG.
-        val out = ByteArrayOutputStream()
-        yuvImage.compressToJpeg(Rect(0, 0, width, height), 100, out)
-        val imageBytes = out.toByteArray()
-
-        // Decode the JPEG bytes into a Bitmap.
-        var bitmap = android.graphics.BitmapFactory.decodeByteArray(imageBytes, 0, imageBytes.size)
+        // 1. Convert YUV planes to a Bitmap.
+        val bitmap: Bitmap = if (conversionMode == 0) {
+            nv21ToArgbBitmap(yuvBytes, width, height)
+        } else {
+            val yuvImage = YuvImage(yuvBytes, ImageFormat.NV21, width, height, null)
+            val out = ByteArrayOutputStream()
+            yuvImage.compressToJpeg(Rect(0, 0, width, height), jpegQuality, out)
+            val imageBytes = out.toByteArray()
+            android.graphics.BitmapFactory.decodeByteArray(imageBytes, 0, imageBytes.size)
+        }
 
         // 2. Create an MPImage from the Bitmap.
         val mpImage = BitmapImageBuilder(bitmap).build()
