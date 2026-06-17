@@ -74,5 +74,5 @@ android {
 }
 
 dependencies {
-    implementation "com.google.mediapipe:tasks-vision:0.10.26.1"
+    implementation "com.google.mediapipe:tasks-vision:0.10.29"
 }
