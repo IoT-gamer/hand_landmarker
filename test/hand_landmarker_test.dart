@@ -196,7 +196,7 @@ void main() {
         );
       });
 
-      test('RED proof: non-disposed instance has _disposed=false', () {
+      test('disposedForTesting() sets _disposed=true (RED: fails if it stayed false)', () {
         final disposed = HandLandmarkerPlugin.disposedForTesting();
         expect(disposed.isDisposedForTesting, equals(true),
             reason: 'disposedForTesting must set _disposed=true');
