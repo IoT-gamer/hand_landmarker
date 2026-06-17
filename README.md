@@ -213,6 +213,20 @@ void dispose() {
 }
 ```
 
+`detectAsync` accepts two optional guards:
+
+```dart
+final hands = await _plugin!.detectAsync(
+  image,
+  sensorOrientation,
+  timeout: const Duration(seconds: 5), // evict the frame if the worker never replies
+  dropIfBusy: true,                     // skip frames while a detection is in flight
+);
+```
+
+- `timeout` (default 5s) completes the future with a `TimeoutException` and evicts the request if the worker reply never arrives (e.g. the worker died mid-frame), so the call never hangs forever.
+- `dropIfBusy` (default `false`) returns an empty list immediately when a detection is already in flight, bounding the worker queue. With it off, you own the pacing (the example self-guards with `_isDetecting`).
+
 **Notes:**
 - Only `Uint8List` and `int` primitives cross the isolate port — no JNI handles.
 - `dispose()` is synchronous (backward-compatible). Use `disposeAsync()` if you need to await full worker shutdown.

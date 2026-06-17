@@ -9,10 +9,12 @@ All notable changes to this project will be documented in this file.
 * **Faster frame conversion**: camera frames now convert via a direct NV21→ARGB pixel path that skips the per-frame JPEG encode/decode round-trip (~3–8 ms saved per frame). Applies to both `detect()` and `detectAsync()`.
 * **Async detection via worker isolate** (`createAsync` / `detectAsync`): `HandLandmarkerPlugin.createAsync(...)` spawns a dedicated Dart isolate that owns the native MediaPipe handle. `detectAsync(CameraImage, int)` offloads the blocking JNI call to the worker, keeping the main isolate free. Only `Uint8List` and `int` primitives cross the isolate port boundary (no JNI handles). The worker shuts down gracefully on `dispose()`, draining any in-flight detection before exiting.
 * **`disposeAsync()`**: optional async dispose that awaits worker shutdown completion.
+* **`detectAsync` request guards**: optional `timeout` (default 5s) evicts a frame whose worker reply never arrives and completes it with `TimeoutException` instead of hanging; optional `dropIfBusy` drops frames submitted while a detection is in flight, bounding the worker queue.
 
 ### **Bug Fixes**
 
 * **Native handle leak fixed**: `HandLandmarker.close()` is now called on dispose (both sync and async paths), preventing MediaPipe native resource leaks that existed in prior versions.
+* **Native buffer leak on error paths fixed**: the YUV `JByteBuffer`s and result `JString` are now released in a `finally` block on both `detect()` and the worker path, so a throwing detection no longer leaks native buffers per frame.
 
 ### **Notes**
 

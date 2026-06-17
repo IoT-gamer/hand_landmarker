@@ -152,12 +152,16 @@ void _workerEntry(_InitMsg msg) {
       Isolate.exit();
     }
     if (message is _FrameRequest) {
+      JByteBuffer? yBuffer;
+      JByteBuffer? uBuffer;
+      JByteBuffer? vBuffer;
+      JString? resultJString;
       try {
-        final yBuffer = JByteBuffer.fromList(message.y);
-        final uBuffer = JByteBuffer.fromList(message.u);
-        final vBuffer = JByteBuffer.fromList(message.v);
+        yBuffer = JByteBuffer.fromList(message.y);
+        uBuffer = JByteBuffer.fromList(message.u);
+        vBuffer = JByteBuffer.fromList(message.v);
 
-        final resultJString = landmarker.detectFromYuv(
+        resultJString = landmarker.detectFromYuv(
           yBuffer,
           uBuffer,
           vBuffer,
@@ -170,11 +174,6 @@ void _workerEntry(_InitMsg msg) {
         );
         final json = resultJString.toDartString();
 
-        yBuffer.release();
-        uBuffer.release();
-        vBuffer.release();
-        resultJString.release();
-
         msg.replyPort.send(_FrameReply(
           id: message.id,
           json: json,
@@ -186,6 +185,11 @@ void _workerEntry(_InitMsg msg) {
           error: e.toString(),
           workerDebugName: Isolate.current.debugName,
         ));
+      } finally {
+        yBuffer?.release();
+        uBuffer?.release();
+        vBuffer?.release();
+        resultJString?.release();
       }
     }
   });
@@ -206,6 +210,10 @@ class HandLandmarkerPlugin {
   bool _disposed = false;
   int _nextRequestId = 0;
   final Map<int, Completer<List<Hand>>> _pendingRequests = {};
+
+  // Per-request eviction timers, so a frame whose worker reply never arrives
+  // (e.g. the worker died mid-detection) does not orphan its [Completer].
+  final Map<int, Timer> _pendingTimers = {};
 
   // Completer fulfilled when the worker sends _Closed; used by disposeAsync().
   Completer<void>? _closedAck;
@@ -282,6 +290,7 @@ class HandLandmarkerPlugin {
         return;
       }
       if (message is _FrameReply) {
+        plugin._pendingTimers.remove(message.id)?.cancel();
         final completer = plugin._pendingRequests.remove(message.id);
         if (completer == null) return;
         if (message.error != null) {
@@ -312,40 +321,69 @@ class HandLandmarkerPlugin {
     final yBuffer = JByteBuffer.fromList(yPlane.bytes);
     final uBuffer = JByteBuffer.fromList(uPlane.bytes);
     final vBuffer = JByteBuffer.fromList(vPlane.bytes);
-
-    final resultJString = _landmarker!.detectFromYuv(
-      yBuffer,
-      uBuffer,
-      vBuffer,
-      image.width,
-      image.height,
-      yPlane.bytesPerRow,
-      uPlane.bytesPerRow,
-      uPlane.bytesPerPixel!,
-      sensorOrientation,
-    );
-    final resultString = resultJString.toDartString();
-
-    yBuffer.release();
-    uBuffer.release();
-    vBuffer.release();
-    resultJString.release();
-
-    return _parseHands(resultString);
+    JString? resultJString;
+    try {
+      resultJString = _landmarker!.detectFromYuv(
+        yBuffer,
+        uBuffer,
+        vBuffer,
+        image.width,
+        image.height,
+        yPlane.bytesPerRow,
+        uPlane.bytesPerRow,
+        uPlane.bytesPerPixel!,
+        sensorOrientation,
+      );
+      return _parseHands(resultJString.toDartString());
+    } finally {
+      yBuffer.release();
+      uBuffer.release();
+      vBuffer.release();
+      resultJString?.release();
+    }
   }
 
   /// Detects hand landmarks asynchronously on the worker isolate.
+  ///
+  /// [timeout] bounds how long a single frame may wait for the worker. If the
+  /// worker never replies (e.g. it died mid-detection), the request is evicted
+  /// and the future completes with a [TimeoutException] instead of hanging.
+  ///
+  /// When [dropIfBusy] is true, a frame submitted while another detection is
+  /// still in flight is dropped and resolves to an empty list, bounding the
+  /// worker queue under back-pressure. When false (default), every frame is
+  /// enqueued — the caller is responsible for its own pacing.
+  ///
   /// Throws [StateError] if called after dispose or on a sync instance.
-  Future<List<Hand>> detectAsync(CameraImage image, int sensorOrientation) {
+  Future<List<Hand>> detectAsync(
+    CameraImage image,
+    int sensorOrientation, {
+    Duration timeout = const Duration(seconds: 5),
+    bool dropIfBusy = false,
+  }) {
     if (_disposed) throw StateError('HandLandmarkerPlugin has been disposed');
     if (!_isAsync) {
       throw StateError(
           'detectAsync() called on sync instance — use detect()');
     }
 
+    if (dropIfBusy && _pendingRequests.isNotEmpty) {
+      return Future.value(const <Hand>[]);
+    }
+
     final id = _nextRequestId++;
     final completer = Completer<List<Hand>>();
     _pendingRequests[id] = completer;
+
+    _pendingTimers[id] = Timer(timeout, () {
+      _pendingTimers.remove(id);
+      final pending = _pendingRequests.remove(id);
+      if (pending != null && !pending.isCompleted) {
+        pending.completeError(
+          TimeoutException('detectAsync timed out', timeout),
+        );
+      }
+    });
 
     // Only Uint8List + ints cross the port (AC-7)
     final request = _FrameRequest.fromCameraImage(
@@ -364,6 +402,10 @@ class HandLandmarkerPlugin {
     _disposed = true;
 
     if (_isAsync) {
+      for (final timer in _pendingTimers.values) {
+        timer.cancel();
+      }
+      _pendingTimers.clear();
       for (final completer in _pendingRequests.values) {
         completer.completeError(
             StateError('HandLandmarkerPlugin has been disposed'));
