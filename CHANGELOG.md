@@ -2,6 +2,20 @@
 
 All notable changes to this project will be documented in this file.
 
+## **2.3.0 - 2026-06-17**
+
+### **🛠️ Maintenance & Dependencies**
+
+* **JNI Configuration Migration**: Migrated the `jnigen` configuration from `jnigen.yaml` to a Dart-based script at `tool/jnigen.dart` for compatibility with `jnigen` `0.16.0`.
+* **Context Refactor**: Refactored native context retrieval in `hand_landmarker.dart` to use `androidApplicationContext` via the new `jni_flutter` package.
+* **SDK Constraints**: Updated the minimum Dart SDK requirement to `>=3.3.0` for both the plugin and the example app.
+* **Dependency Bumps**:
+    * Bumped `jni` to `^1.0.0`.
+    * Added `jni_flutter` at `^1.0.1`.
+    * Bumped `jnigen` (dev dependency) to `^0.16.0`.
+    * Bumped `camera` to `^0.12.0+1`.
+    * Bumped Android MediaPipe `tasks-vision` dependency to `0.10.29` in `android/build.gradle`.
+
 ## **2.2.0 - 2025-12-13**
 
 ### **💥 Breaking Changes**

@@ -40,7 +40,7 @@ Add the following dependencies to your app's pubspec.yaml file:
 
 ```yaml
 dependencies:  
-  hand_landmarker: ^2.2.0 # Use the latest version
+  hand_landmarker: ^2.3.0 # Use the latest version
 ```
 
 Then, run `flutter pub get`.
