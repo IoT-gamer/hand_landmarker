@@ -13,14 +13,15 @@ topics:
   - jni
 
 environment:
-  sdk: '>=3.0.0 <4.0.0'
+  sdk: '>=3.3.0 <4.0.0'
   flutter: '>=3.3.0'
 
 dependencies:
   flutter:
     sdk: flutter
   # jni is required at runtime by the plugin's code.
-  jni: ^0.15.2
+  jni: ^1.0.0
+  jni_flutter: ^1.0.1
   camera: ^0.11.3
   plugin_platform_interface: ^2.1.8
 
@@ -29,7 +30,7 @@ dev_dependencies:
     sdk: flutter
   flutter_lints: ^5.0.0
   # jnigen is a development tool for generating code, not a runtime dependency.
-  jnigen: ^0.15.0
+  jnigen: ^0.16.0
 
 flutter:
   plugin:

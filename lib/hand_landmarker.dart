@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:camera/camera.dart';
 import 'package:jni/jni.dart';
+import 'package:jni_flutter/jni_flutter.dart';
 
 // This is the auto-generated file from jnigen.
 import 'hand_landmarker_bindings.dart';
@@ -40,7 +41,7 @@ class HandLandmarkerPlugin {
     HandLandmarkerDelegate delegate = HandLandmarkerDelegate.gpu,
   }) {
     // Create the native MyHandLandmarker object.
-    final contextObj = Jni.androidApplicationContext;
+    final contextObj = androidApplicationContext;
 
     final landmarker = MyHandLandmarker(contextObj);
 
