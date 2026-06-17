@@ -6,7 +6,7 @@ All notable changes to this project will be documented in this file.
 
 ### **Features**
 
-* **Configurable image conversion mode** (`ConversionMode`): choose between the new `ConversionMode.direct` (default) — a direct NV21→ARGB pixel-by-pixel conversion that skips the per-frame JPEG encode/decode (~3–8 ms saved per frame) — or `ConversionMode.jpeg(quality: q)` to retain the previous JPEG round-trip path. `sync detect()` and `createAsync()` both default to `direct`.
+* **Faster frame conversion**: camera frames now convert via a direct NV21→ARGB pixel path that skips the per-frame JPEG encode/decode round-trip (~3–8 ms saved per frame). Applies to both `detect()` and `detectAsync()`.
 * **Async detection via worker isolate** (`createAsync` / `detectAsync`): `HandLandmarkerPlugin.createAsync(...)` spawns a dedicated Dart isolate that owns the native MediaPipe handle. `detectAsync(CameraImage, int)` offloads the blocking JNI call to the worker, keeping the main isolate free. Only `Uint8List` and `int` primitives cross the isolate port boundary (no JNI handles). The worker shuts down gracefully on `dispose()`, draining any in-flight detection before exiting.
 * **`disposeAsync()`**: optional async dispose that awaits worker shutdown completion.
 

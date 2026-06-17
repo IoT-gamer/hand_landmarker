@@ -2,16 +2,12 @@ package io.github.iot_gamer.hand_landmarker
 
 import android.content.Context
 import android.graphics.Bitmap
-import android.graphics.ImageFormat
-import android.graphics.Rect
-import android.graphics.YuvImage
 import com.google.mediapipe.framework.image.BitmapImageBuilder
 import com.google.mediapipe.framework.image.MPImage
 import com.google.mediapipe.tasks.core.BaseOptions
 import com.google.mediapipe.tasks.core.Delegate
 import com.google.mediapipe.tasks.vision.core.ImageProcessingOptions
 import com.google.mediapipe.tasks.vision.handlandmarker.HandLandmarker
-import java.io.ByteArrayOutputStream
 import java.nio.ByteBuffer
 
 class MyHandLandmarker(private val context: Context) {
@@ -68,7 +64,7 @@ class MyHandLandmarker(private val context: Context) {
 
     /**
      * Detects hand landmarks from YUV image planes.
-     * conversionMode: 0 = direct NV21->ARGB (no JPEG round-trip), 1 = JPEG encode/decode path.
+     * Converts NV21 directly to ARGB (no JPEG round-trip).
      */
     fun detectFromYuv(
         yBuffer: ByteBuffer,
@@ -79,9 +75,7 @@ class MyHandLandmarker(private val context: Context) {
         yRowStride: Int,
         uvRowStride: Int,
         uvPixelStride: Int,
-        rotation: Int,
-        conversionMode: Int,
-        jpegQuality: Int
+        rotation: Int
     ): String {
         if (handLandmarker == null) {
             initialize(2, 0.5f, true)
@@ -89,16 +83,8 @@ class MyHandLandmarker(private val context: Context) {
 
         val yuvBytes = convertYuvToNv21(yBuffer, uBuffer, vBuffer, width, height, yRowStride, uvRowStride, uvPixelStride)
 
-        // 1. Convert YUV planes to a Bitmap.
-        val bitmap: Bitmap = if (conversionMode == 0) {
-            nv21ToArgbBitmap(yuvBytes, width, height)
-        } else {
-            val yuvImage = YuvImage(yuvBytes, ImageFormat.NV21, width, height, null)
-            val out = ByteArrayOutputStream()
-            yuvImage.compressToJpeg(Rect(0, 0, width, height), jpegQuality, out)
-            val imageBytes = out.toByteArray()
-            android.graphics.BitmapFactory.decodeByteArray(imageBytes, 0, imageBytes.size)
-        }
+        // 1. Convert YUV planes to a Bitmap (direct NV21->ARGB).
+        val bitmap: Bitmap = nv21ToArgbBitmap(yuvBytes, width, height)
 
         // 2. Create an MPImage from the Bitmap.
         val mpImage = BitmapImageBuilder(bitmap).build()

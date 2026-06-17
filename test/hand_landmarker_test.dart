@@ -81,36 +81,6 @@ void main() {
       });
     });
 
-    group('ConversionMode mapping tests', () {
-      test('ConversionMode.direct maps to conversionMode=0, jpegQuality=90', () {
-        final (cm, jq) = ConversionMode.direct.paramsForTesting;
-        expect(cm, equals(0), reason: 'direct must use conversionMode=0');
-        expect(jq, equals(90), reason: 'direct jpegQuality sentinel must be 90');
-      });
-
-      test('ConversionMode.direct is the canonical const', () {
-        expect(identical(ConversionMode.direct, ConversionMode.direct), isTrue);
-      });
-
-      test('ConversionMode.jpeg(quality:75) maps to conversionMode=1, jpegQuality=75', () {
-        final mode = ConversionMode.jpeg(quality: 75);
-        final (cm, jq) = mode.paramsForTesting;
-        expect(cm, equals(1), reason: 'jpeg must use conversionMode=1');
-        expect(jq, equals(75), reason: 'jpegQuality must reflect the given quality');
-      });
-
-      test('ConversionMode.jpeg default quality is 90', () {
-        final mode = ConversionMode.jpeg();
-        final (_, jq) = mode.paramsForTesting;
-        expect(jq, equals(90));
-      });
-
-      test('ConversionMode.direct maps to 0 — RED proof: changing to 1 would fail', () {
-        final (cm, _) = ConversionMode.direct.paramsForTesting;
-        expect(cm, isNot(equals(1)));
-      });
-    });
-
     group('_FrameRequest field type safety (AC-7)', () {
       // Verifies that every field produced by the REAL _FrameRequest construction
       // path (the same code detectAsync uses) is an int or Uint8List —

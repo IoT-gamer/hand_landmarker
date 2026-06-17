@@ -29,39 +29,6 @@ class Landmark {
 
 enum HandLandmarkerDelegate { cpu, gpu }
 
-// --- ConversionMode ---
-
-sealed class ConversionMode {
-  const ConversionMode();
-
-  static const ConversionMode direct = _Direct();
-
-  factory ConversionMode.jpeg({int quality = 90}) => _Jpeg(quality: quality);
-
-  /// Returns the (conversionMode, jpegQuality) pair for the JNI boundary.
-  (int conversionMode, int jpegQuality) get _params;
-
-  /// Exposed for testing only — returns (conversionMode, jpegQuality).
-  @visibleForTesting
-  (int, int) get paramsForTesting => _params;
-}
-
-class _Direct extends ConversionMode {
-  const _Direct();
-
-  @override
-  (int, int) get _params => (0, 90);
-}
-
-class _Jpeg extends ConversionMode {
-  final int quality;
-
-  const _Jpeg({required this.quality});
-
-  @override
-  (int, int) get _params => (1, quality);
-}
-
 // --- Worker isolate messages (only bytes/ints/Strings cross the port) ---
 
 class _InitMsg {
@@ -69,16 +36,12 @@ class _InitMsg {
   final int numHands;
   final double minHandDetectionConfidence;
   final bool useGpu;
-  final int conversionMode;
-  final int jpegQuality;
 
   _InitMsg({
     required this.replyPort,
     required this.numHands,
     required this.minHandDetectionConfidence,
     required this.useGpu,
-    required this.conversionMode,
-    required this.jpegQuality,
   });
 }
 
@@ -204,8 +167,6 @@ void _workerEntry(_InitMsg msg) {
           message.uvRowStride,
           message.uvPixelStride,
           message.rotation,
-          msg.conversionMode,
-          msg.jpegQuality,
         );
         final json = resultJString.toDartString();
 
@@ -236,7 +197,6 @@ void _workerEntry(_InitMsg msg) {
 class HandLandmarkerPlugin {
   // Sync instance fields
   final MyHandLandmarker? _landmarker;
-  final ConversionMode? _conversionMode;
 
   // Async instance fields
   final Isolate? _isolate;
@@ -251,15 +211,14 @@ class HandLandmarkerPlugin {
   Completer<void>? _closedAck;
 
   /// Private constructor for sync instances.
-  HandLandmarkerPlugin._(this._landmarker, this._conversionMode)
+  HandLandmarkerPlugin._(this._landmarker)
       : _isolate = null,
         _workerPort = null,
         _recvPort = null;
 
   /// Private constructor for async instances.
   HandLandmarkerPlugin._async(this._isolate, this._workerPort, this._recvPort)
-      : _landmarker = null,
-        _conversionMode = null;
+      : _landmarker = null;
 
   bool get _isAsync => _isolate != null;
 
@@ -267,7 +226,7 @@ class HandLandmarkerPlugin {
   /// tests asserting post-dispose [StateError] guards without a live JNI/isolate.
   @visibleForTesting
   factory HandLandmarkerPlugin.disposedForTesting() {
-    final inst = HandLandmarkerPlugin._(null, null);
+    final inst = HandLandmarkerPlugin._(null);
     inst._disposed = true;
     return inst;
   }
@@ -282,7 +241,6 @@ class HandLandmarkerPlugin {
     int numHands = 2,
     double minHandDetectionConfidence = 0.5,
     HandLandmarkerDelegate delegate = HandLandmarkerDelegate.gpu,
-    ConversionMode conversionMode = ConversionMode.direct,
   }) {
     final contextObj = Jni.androidApplicationContext;
     final landmarker = MyHandLandmarker(contextObj);
@@ -291,7 +249,7 @@ class HandLandmarkerPlugin {
       minHandDetectionConfidence,
       delegate == HandLandmarkerDelegate.gpu,
     );
-    return HandLandmarkerPlugin._(landmarker, conversionMode);
+    return HandLandmarkerPlugin._(landmarker);
   }
 
   /// Creates and initializes the Hand Landmarker on a dedicated worker isolate.
@@ -299,18 +257,14 @@ class HandLandmarkerPlugin {
     int numHands = 2,
     double minHandDetectionConfidence = 0.5,
     HandLandmarkerDelegate delegate = HandLandmarkerDelegate.gpu,
-    ConversionMode conversionMode = ConversionMode.direct,
   }) async {
     final recvPort = ReceivePort();
-    final (cm, jq) = conversionMode._params;
 
     final initMsg = _InitMsg(
       replyPort: recvPort.sendPort,
       numHands: numHands,
       minHandDetectionConfidence: minHandDetectionConfidence,
       useGpu: delegate == HandLandmarkerDelegate.gpu,
-      conversionMode: cm,
-      jpegQuality: jq,
     );
 
     final isolate = await Isolate.spawn(_workerEntry, initMsg,
@@ -351,8 +305,6 @@ class HandLandmarkerPlugin {
       throw StateError('detect() called on async instance — use detectAsync()');
     }
 
-    final (cm, jq) = _conversionMode!._params;
-
     final yPlane = image.planes[0];
     final uPlane = image.planes[1];
     final vPlane = image.planes[2];
@@ -371,8 +323,6 @@ class HandLandmarkerPlugin {
       uPlane.bytesPerRow,
       uPlane.bytesPerPixel!,
       sensorOrientation,
-      cm,
-      jq,
     );
     final resultString = resultJString.toDartString();
 
