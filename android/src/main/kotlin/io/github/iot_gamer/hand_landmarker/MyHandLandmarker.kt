@@ -52,36 +52,25 @@ class MyHandLandmarker(private val context: Context) {
         uvPixelStride: Int,
         rotation: Int
     ): String {
+        
         if (handLandmarker == null) {
-            // Default initialization if not already configured
             initialize(2, 0.5f, true)
         }
 
-        // 1. Convert YUV planes to a Bitmap.
-        val yuvBytes = convertYuvToNv21(yBuffer, uBuffer, vBuffer, width, height, yRowStride, uvRowStride, uvPixelStride)
+        // Convert YUV planes DIRECTLY to an ARGB Bitmap
+        val bitmap = yuvToRgbBitmap(yBuffer, uBuffer, vBuffer, width, height, yRowStride, uvRowStride, uvPixelStride)
 
-        // Create a YuvImage from the NV21 data.
-        val yuvImage = YuvImage(yuvBytes, ImageFormat.NV21, width, height, null)
-
-        // Create a ByteArrayOutputStream and compress the YuvImage to a JPEG.
-        val out = ByteArrayOutputStream()
-        yuvImage.compressToJpeg(Rect(0, 0, width, height), 100, out)
-        val imageBytes = out.toByteArray()
-
-        // Decode the JPEG bytes into a Bitmap.
-        var bitmap = android.graphics.BitmapFactory.decodeByteArray(imageBytes, 0, imageBytes.size)
-
-        // 2. Create an MPImage from the Bitmap.
+        // Create an MPImage from the Bitmap
         val mpImage = BitmapImageBuilder(bitmap).build()
 
         val imageProcessingOptions = ImageProcessingOptions.builder()
             .setRotationDegrees(rotation)
             .build()
 
-        // 3. Run detection.
+        // Run detection
         val result = handLandmarker?.detect(mpImage, imageProcessingOptions)
 
-        // 4. Clean up and build the JSON result.
+        // Clean up memory immediately
         bitmap.recycle()
         mpImage.close()
 
@@ -115,10 +104,10 @@ class MyHandLandmarker(private val context: Context) {
     }
 
     /**
-     * Helper function to convert YUV planes from Flutter's CameraImage to a single NV21 byte array.
-     * NV21 format is required by Android's YuvImage class.
+     * Converts Y, U, V planes directly to an ARGB_8888 Bitmap.
+     * This avoids both NV21 intermediate allocation and JPEG compression.
      */
-    private fun convertYuvToNv21(
+    private fun yuvToRgbBitmap(
         yBuffer: ByteBuffer,
         uBuffer: ByteBuffer,
         vBuffer: ByteBuffer,
@@ -127,33 +116,41 @@ class MyHandLandmarker(private val context: Context) {
         yRowStride: Int,
         uvRowStride: Int,
         uvPixelStride: Int
-    ): ByteArray {
-        val nv21Bytes = ByteArray(width * height * 3 / 2)
-        var yIndex = 0
-        val yPlaneSize = width * height
+    ): Bitmap {
+        val argbArray = IntArray(width * height)
+        var yp = 0
+        
+        for (j in 0 until height) {
+            val uvRowStart = (j / 2) * uvRowStride
+            val yRowStart = j * yRowStride
+            
+            for (i in 0 until width) {
+                val uvOffset = uvRowStart + (i / 2) * uvPixelStride
+                
+                // Extract Y, U, V values and adjust standard ranges
+                val y = (yBuffer.get(yRowStart + i).toInt() and 0xFF) - 16
+                val u = (uBuffer.get(uvOffset).toInt() and 0xFF) - 128
+                val v = (vBuffer.get(uvOffset).toInt() and 0xFF) - 128
 
-        // Copy Y plane
-        for (y in 0 until height) {
-            val yRow = y * yRowStride
-            yBuffer.position(yRow)
-            yBuffer.get(nv21Bytes, yIndex, width)
-            yIndex += width
-        }
+                // Fast integer math for YUV to RGB conversion
+                val y1192 = if (y < 0) 0 else 1192 * y
+                var r = y1192 + 1634 * v
+                var g = y1192 - 833 * v - 400 * u
+                var b = y1192 + 2066 * u
 
-        // Copy U and V planes
-        var uvIndex = yPlaneSize
-        val uvHeight = height / 2
-        val uvWidth = width / 2
+                // Clamp values to 0-255 using bitwise logic
+                r = if (r < 0) 0 else if (r > 262143) 262143 else r
+                g = if (g < 0) 0 else if (g > 262143) 262143 else g
+                b = if (b < 0) 0 else if (b > 262143) 262143 else b
 
-        for (y in 0 until uvHeight) {
-            for (x in 0 until uvWidth) {
-                val uIndex = y * uvRowStride + x * uvPixelStride
-                val vIndex = y * uvRowStride + x * uvPixelStride
-                // In NV21, V plane comes first, then U plane
-                nv21Bytes[uvIndex++] = vBuffer[vIndex]
-                nv21Bytes[uvIndex++] = uBuffer[uIndex]
+                // Pack into ARGB pixel
+                argbArray[yp++] = -0x1000000 or 
+                        ((r shl 6) and 0xFF0000) or 
+                        ((g shr 2) and 0xFF00) or 
+                        ((b shr 10) and 0xFF)
             }
         }
-        return nv21Bytes
+        
+        return Bitmap.createBitmap(argbArray, width, height, Bitmap.Config.ARGB_8888)
     }
 }
