@@ -11,12 +11,17 @@ import com.google.mediapipe.tasks.core.BaseOptions
 import com.google.mediapipe.tasks.core.Delegate
 import com.google.mediapipe.tasks.vision.core.ImageProcessingOptions
 import com.google.mediapipe.tasks.vision.handlandmarker.HandLandmarker
+import com.google.mediapipe.tasks.vision.core.RunningMode    
 import java.io.ByteArrayOutputStream
 import java.nio.ByteBuffer
 
-class MyHandLandmarker(private val context: Context) {
+interface HandLandmarkListener {
+    fun onLandmarksDetected(landmarksJson: String)
+}
 
+class MyHandLandmarker(private val context: Context) {
     private var handLandmarker: HandLandmarker? = null
+    var listener: HandLandmarkListener? = null // Attach the listener here
 
     fun initialize(
         numHands: Int,
@@ -28,13 +33,72 @@ class MyHandLandmarker(private val context: Context) {
             .setModelAssetPath("hand_landmarker.task")
             .setDelegate(delegate)
             .build()
+            
         val options = HandLandmarker.HandLandmarkerOptions.builder()
             .setBaseOptions(baseOptions)
             .setNumHands(numHands)
-            .setRunningMode(com.google.mediapipe.tasks.vision.core.RunningMode.IMAGE)
+            // Switch to LIVE_STREAM mode for async processing
+            .setRunningMode(com.google.mediapipe.tasks.vision.core.RunningMode.LIVE_STREAM)
             .setMinHandDetectionConfidence(minHandDetectionConfidence)
+            // Listen for results on the background thread
+            .setResultListener { result, _ ->
+                if (result == null || result.landmarks().isEmpty()) {
+                    HandLandmarkerPlugin.sendLandmarks("[]")
+                    return@setResultListener
+                }
+
+                // Build a JSON string of the landmarks
+                val handsJson = StringBuilder()
+                handsJson.append("[")
+                result.landmarks().forEachIndexed { handIndex, handLandmarks ->
+                    handsJson.append("[")
+                    handLandmarks.forEachIndexed { landmarkIndex, landmark ->
+                        handsJson.append("{")
+                        handsJson.append("\"x\":${landmark.x()},")
+                        handsJson.append("\"y\":${landmark.y()},")
+                        handsJson.append("\"z\":${landmark.z()}")
+                        handsJson.append("}")
+                        if (landmarkIndex < handLandmarks.size - 1) {
+                            handsJson.append(",")
+                        }
+                    }
+                    handsJson.append("]")
+                    if (handIndex < result.landmarks().size - 1) {
+                        handsJson.append(",")
+                    }
+                }
+                handsJson.append("]")
+
+                // Send the generated JSON string to Dart via the plugin's companion object
+                HandLandmarkerPlugin.sendLandmarks(handsJson.toString())
+            }
+            .setErrorListener { error ->
+                android.util.Log.e("HandLandmarker", "MediaPipe Error: ${error.message}")
+            }
             .build()
+            
         handLandmarker = HandLandmarker.createFromOptions(context, options)
+    }
+
+    fun processFrame(
+        yBuffer: ByteBuffer, uBuffer: ByteBuffer, vBuffer: ByteBuffer,
+        width: Int, height: Int, yRowStride: Int, uvRowStride: Int, uvPixelStride: Int,
+        rotation: Int, timestampMs: Long // Live_stream requires a monotonic timestamp
+    ) {
+        if (handLandmarker == null) return
+
+        // Use the fast integer ARGB conversion
+        val bitmap = yuvToRgbBitmap(yBuffer, uBuffer, vBuffer, width, height, yRowStride, uvRowStride, uvPixelStride)
+        val mpImage = BitmapImageBuilder(bitmap).build()
+
+        val imageProcessingOptions = ImageProcessingOptions.builder()
+            .setRotationDegrees(rotation)
+            .build()
+
+        // Use detectAsync. MediaPipe handles the threading from here.
+        handLandmarker?.detectAsync(mpImage, imageProcessingOptions, timestampMs)
+        
+        mpImage.close() 
     }
 
     /**

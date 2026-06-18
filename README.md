@@ -4,27 +4,27 @@
 [![Pub Points](https://img.shields.io/pub/points/hand_landmarker)](https://pub.dev/packages/hand_landmarker/score)
 [![MIT License](https://img.shields.io/github/license/IoT-gamer/hand_landmarker)](https://opensource.org/license/MIT)
 
-A Flutter plugin for real-time hand landmark detection on Android. This package uses Google's MediaPipe Hand Landmarker task, bridged to Flutter using JNI, to deliver high-performance hand tracking.
+A Flutter plugin for real-time hand landmark detection on Android. This package uses Google's MediaPipe Hand Landmarker task, bridged to Flutter using JNI, to deliver high-performance, non-blocking hand tracking.
 
-This plugin provides a simple Dart API that hides the complexity of native code and image format conversion, allowing you to focus on building your app's features.
+This plugin provides a simple Dart API that hides the complexity of native code and background thread management, allowing you to easily consume a stream of hand coordinates without dropping UI frames.
 
 ## Features
 
-* **Live Hand Tracking**: Performs real-time detection of hand landmarks from a CameraImage stream.  
-* **High Performance & Customizable**: Leverages the native Android MediaPipe library with a configurable **delegate (GPU or CPU)** for highly performant ML inference. You can also configure the number of hands to detect and the detection confidence. 
-* **Simple, Type-Safe API**: Provides clean Dart data models (Hand, Landmark) for the detection results.  
-* **Resource Management**: Includes a dispose() method to properly clean up all native resources.  
+* **Non-Blocking Live Tracking:** Performs real-time detection of hand landmarks from a `CameraImage` stream. Inference runs entirely on a background thread, keeping your Flutter UI perfectly smooth.  
+* **High Performance & Customizable**: Leverages the native Android MediaPipe library with a configurable **delegate (GPU or CPU).** Bypass expensive JPEG compression with a custom, high-speed YUV to ARGB converter. 
+* **Simple, Type-Safe API**: Provides clean Dart data models (`Hand`, `Landmark`) delivered via a standard asynchronous `Stream`.  
+* **Resource Management**: Includes a `dispose()` method to properly clean up all native resources.  
 * **Bundled Model**: The required [hand_landmarker.task](https://ai.google.dev/edge/mediapipe/solutions/vision/hand_landmarker#models) model is bundled with the plugin, so no manual setup is required.
 
 ## How it Works
 
-The plugin follows a highly efficient architecture that minimizes cross-language overhead and leverages native performance.
+The plugin follows a highly efficient architecture that minimizes cross-language overhead and prevents UI jank:
 
 1. **Camera Stream (Flutter)**: Your application provides a stream of CameraImage frames, which are in YUV format.  
-2. **JNI Bridge (Dart -> Kotlin)**: The raw YUV image planes (y, u, v buffers) and their metadata are passed directly to the native Android side via a JNI bridge. This avoids any expensive image conversion in Dart.  
-3. **Native Image Processing (Kotlin)**: The native code reconstructs an image from the YUV planes that MediaPipe can process.  
-4. **GPU-Accelerated Detection (Kotlin)**: The native code uses the MediaPipe HandLandmarker task, configured with the **GPU delegate**, to detect hand landmarks in the image.  
-5. **Return** to **Flutter**: The detection results are serialized to JSON and returned synchronously to Dart, where they are parsed into the clean data models (List<Hand>).
+2. **JNI Bridge (Dart -> Kotlin)**: The raw YUV image planes (y, u, v buffers) and their metadata are passed directly to the native Android side via a JNI bridge, avoiding any serialization overhead. 
+3. **Optimized Image Processing (Kotlin):** The native code reconstructs an ARGB image directly from the YUV planes using fast integer math, bypassing expensive standard Android JPEG compression entirely.  
+4. **Asynchronous Detection (Kotlin):** MediaPipe runs in `LIVE_STREAM` mode, executing ML inference on a dedicated background worker thread. 
+5. **Stream to Flutter:** The detection results are packaged into JSON and pushed via an `EventChannel` to a Dart broadcast `Stream`, where they are parsed into clean data models (`List<Hand>`).
 
 ## Getting Started
 
@@ -36,61 +36,58 @@ The plugin follows a highly efficient architecture that minimizes cross-language
 
 ### Installation
 
-Add the following dependencies to your app's pubspec.yaml file:
+Add the following dependencies to your app's `pubspec.yaml` file:
 
 ```yaml
 dependencies:  
-  hand_landmarker: ^2.3.0 # Use the latest version
+  hand_landmarker: ^3.0.0 # Use the latest version
 ```
 
 Then, run `flutter pub get`.
 
 ## Usage
 
-Here is a basic example of how to use the plugin within a Flutter widget.
+Here is a basic example of how to use the plugin within a Flutter widget using the asynchronous stream.
 
 ### 1. Initialize the Plugin and Camera
 
-Create an instance of the `HandLandmarkerPlugin` and your `CameraController`. It's best to do this in `initState`.
+Create an instance of the `HandLandmarkerPlugin` and your `CameraController`.
 
 ```dart
-import 'package:flutter/material.dart';  
-import 'package:camera/camera.dart';  
+import 'package:flutter/material.dart';
+import 'package:camera/camera.dart';
 import 'package:hand_landmarker/hand_landmarker.dart';
 
-class HandTrackerView extends StatefulWidget {  
-  const HandTrackerView({super.key});  
-  @override  
-  State<HandTrackerView> createState() => _HandTrackerViewState();  
+class HandTrackerView extends StatefulWidget {
+  const HandTrackerView({super.key});
+  @override
+  State<HandTrackerView> createState() => _HandTrackerViewState();
 }
 
-class _HandTrackerViewState extends State<HandTrackerView> {  
-  HandLandmarkerPlugin? _plugin;  
-  CameraController? _controller;  
-  List<Hand> _landmarks = [];  
-  bool _isInitialized = false;  
-  // Add a guard to prevent processing multiple frames at once.  
-  bool _isDetecting = false;
+class _HandTrackerViewState extends State<HandTrackerView> {
+  HandLandmarkerPlugin? _plugin;
+  CameraController? _controller;
+  bool _isInitialized = false;
 
-  @override  
-  void initState() {  
-    super.initState();  
-    _initialize();  
+  @override
+  void initState() {
+    super.initState();
+    _initialize();
   }
 
-  Future<void> _initialize() async {  
-    // Get available cameras  
-    final cameras = await availableCameras();  
-    // Select the front camera  
-    final camera = cameras.firstWhere(  
-      (cam) => cam.lensDirection == CameraLensDirection.front,  
-      orElse: () => cameras.first,  
+  Future<void> _initialize() async {
+    // Get available cameras
+    final cameras = await availableCameras();
+    // Select the front camera
+    final camera = cameras.firstWhere(
+      (cam) => cam.lensDirection == CameraLensDirection.front,
+      orElse: () => cameras.first,
     );
 
-    _controller = CameraController(  
-      camera,  
-      ResolutionPreset.medium,  
-      enableAudio: false,  
+    _controller = CameraController(
+      camera,
+      ResolutionPreset.medium,
+      enableAudio: false,
     );
 
     // Create an instance of our plugin with custom options.
@@ -100,79 +97,79 @@ class _HandTrackerViewState extends State<HandTrackerView> {
       delegate: HandLandmarkerDelegate.gpu, // The processing delegate (GPU or CPU).
     );
 
-    // Initialize the camera and start the image stream  
-    await _controller!.initialize();  
+    // Initialize the camera and start the image stream
+    await _controller!.initialize();
     await _controller!.startImageStream(_processCameraImage);
 
-    if (mounted) {  
-      setState(() => _isInitialized = true);  
-    }  
+    if (mounted) {
+      setState(() => _isInitialized = true);
+    }
   }
 
-  @override  
-  void dispose() {  
-    _controller?.stopImageStream();  
-    _controller?.dispose();  
-    // The dispose call is now synchronous.  
-    _plugin?.dispose();  
-    super.dispose();  
+  @override
+  void dispose() {
+    _controller?.stopImageStream();
+    _controller?.dispose();
+    _plugin?.dispose();
+    super.dispose();
   }
 ```
 
 ### 2. Process the Camera Stream
 
-Create a method to pass the `CameraImage` to the plugin's detect method. Since the detect call is now a **synchronous, blocking call**, it's crucial to use a guard flag (`_isDetecting`) to prevent UI jank.
+Simply feed the `CameraImage` frames to the plugin. The `processFrame` method is a fire-and-forget call that dispatches the work to the native background thread.
 
 ```dart
-  Future<void> _processCameraImage(CameraImage image) async {  
-    // If detection is already in progress, skip this frame.  
-    if (_isDetecting || !_isInitialized || _plugin == null) return;
+Future<void> _processCameraImage(CameraImage image) async {
+  if (!_isInitialized || _plugin == null) return;
 
-    // Set the flag to true to indicate processing has started.  
-    _isDetecting = true;
-
-    try {  
-      // The detect method is now synchronous and returns the results directly.  
-      final hands = _plugin!.detect(  
-        image,  
-        _controller!.description.sensorOrientation,  
-      );  
-      if (mounted) {  
-        setState(() => _landmarks = hands);  
-      }  
-    } catch (e) {  
-      debugPrint('Error detecting landmarks: $e');  
-    } finally {  
-      // Set the flag back to false to allow the next frame to be processed.  
-      _isDetecting = false;  
-    }  
+  try {
+    // Feed the frame to the native pipeline. Non-blocking.
+    _plugin!.processFrame(
+      image,
+      _controller!.description.sensorOrientation,
+    );
+  } catch (e) {
+    debugPrint('Error processing frame: $e');
   }
+}
 ```
 
 ### 3. Render the Results
 
-You can now use the `_landmarks` list in a `CustomPainter` to draw the results over your `CameraPreview`.
+Listen to the `landmarkStream` using a `StreamBuilder` to draw the results over your `CameraPreview`. Your UI will remain completely responsive.
 
 ```dart
-  @override  
-  Widget build(BuildContext context) {  
-    if (!_isInitialized) {  
-      return const Center(child: CircularProgressIndicator());  
+  @override
+  Widget build(BuildContext context) {
+    if (!_isInitialized) {
+      return const Center(child: CircularProgressIndicator());
     }
 
-    return Stack(  
-      children: [  
-        CameraPreview(_controller!),  
-        CustomPaint(  
-          size: Size.infinite,  
-          painter: LandmarkPainter(  
-            hands: _landmarks,  
-            // ... painter setup  
-          ),  
-        ),  
-      ],  
-    );  
-  }  
+    final previewSize = _controller!.value.previewSize!;
+
+    return Stack(
+      children: [
+        CameraPreview(_controller!),
+        StreamBuilder<List<Hand>>(
+          stream: _plugin!.landmarkStream,
+          initialData: const [],
+          builder: (context, snapshot) {
+            final hands = snapshot.data ?? [];
+            return CustomPaint(
+              size: Size.infinite,
+              painter: LandmarkPainter(
+                hands: hands,
+                previewSize: previewSize,
+                lensDirection: _controller!.description.lensDirection,
+                sensorOrientation: _controller!.description.sensorOrientation,
+              ),
+            );
+          },
+        ),
+      ],
+    );
+  }
 }
 ```
 

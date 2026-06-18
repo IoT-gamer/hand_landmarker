@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'package:camera/camera.dart';
+import 'package:flutter/services.dart';
 import 'package:jni/jni.dart';
 import 'package:jni_flutter/jni_flutter.dart';
 
@@ -31,6 +32,11 @@ class HandLandmarkerPlugin {
   /// The underlying JNI-generated landmarker object.
   final MyHandLandmarker _landmarker;
 
+  /// Standard Flutter EventChannel for receiving the async JSON stream
+  static const EventChannel _eventChannel =
+      EventChannel('hand_landmarker/events');
+  Stream<List<Hand>>? _landmarkStream;
+
   /// Private constructor to force initialization via the `create` method.
   HandLandmarkerPlugin._(this._landmarker);
 
@@ -52,23 +58,43 @@ class HandLandmarkerPlugin {
       delegate == HandLandmarkerDelegate.gpu,
     );
 
+    // The native code routes the data to the EventChannel automatically
     return HandLandmarkerPlugin._(landmarker);
   }
 
-  /// Detects hand landmarks in a given [CameraImage].
-  List<Hand> detect(CameraImage image, int sensorOrientation) {
-    // Get the Y, U, and V planes from the CameraImage.
+  /// Exposes a continuous stream of detected hand landmarks.
+  Stream<List<Hand>> get landmarkStream {
+    _landmarkStream ??= _eventChannel.receiveBroadcastStream().map((event) {
+      final String resultString = event as String;
+      if (resultString.isEmpty || resultString == "[]") return [];
+
+      final parsedResult = jsonDecode(resultString) as List<dynamic>;
+      return parsedResult.map((handData) {
+        final landmarks = (handData as List<dynamic>).map((landmarkData) {
+          final data = landmarkData as Map<String, dynamic>;
+          return Landmark(data['x']!, data['y']!, data['z']!);
+        }).toList();
+        return Hand(landmarks);
+      }).toList();
+    });
+    return _landmarkStream!;
+  }
+
+  /// Feeds a frame into the native MediaPipe pipeline asynchronously.
+  void processFrame(CameraImage image, int sensorOrientation) {
     final yPlane = image.planes[0];
     final uPlane = image.planes[1];
     final vPlane = image.planes[2];
 
-    // Create JNI-compatible ByteBuffers for each plane.
     final yBuffer = JByteBuffer.fromList(yPlane.bytes);
     final uBuffer = JByteBuffer.fromList(uPlane.bytes);
     final vBuffer = JByteBuffer.fromList(vPlane.bytes);
 
-    // Call the new native method with all the required plane data.
-    final resultJString = _landmarker.detectFromYuv(
+    // MediaPipe LIVE_STREAM requires a monotonic timestamp.
+    final timestampMs = DateTime.now().millisecondsSinceEpoch;
+
+    // Fire and forget. No return value, no blocking.
+    _landmarker.processFrame(
       yBuffer,
       uBuffer,
       vBuffer,
@@ -78,30 +104,12 @@ class HandLandmarkerPlugin {
       uPlane.bytesPerRow,
       uPlane.bytesPerPixel!,
       sensorOrientation,
+      timestampMs,
     );
-    final resultString = resultJString.toDartString();
 
-    // Release native resources as soon as possible.
     yBuffer.release();
     uBuffer.release();
     vBuffer.release();
-    resultJString.release();
-
-    if (resultString.isEmpty || resultString == "[]") {
-      return [];
-    }
-
-    // Parse the JSON result and map it to our clean data models.
-    final parsedResult = jsonDecode(resultString) as List<dynamic>;
-    final hands = parsedResult.map((handData) {
-      final landmarks = (handData as List<dynamic>).map((landmarkData) {
-        final data = landmarkData as Map<String, dynamic>;
-        return Landmark(data['x']!, data['y']!, data['z']!);
-      }).toList();
-      return Hand(landmarks);
-    }).toList();
-
-    return hands;
   }
 
   /// Releases the native landmarker resources.

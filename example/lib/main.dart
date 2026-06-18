@@ -90,26 +90,16 @@ class _HandTrackerViewState extends State<HandTrackerView> {
   }
 
   Future<void> _processCameraImage(CameraImage image) async {
-    if (_isDetecting || !_isInitialized || _plugin == null) return;
-
-    _isDetecting = true;
+    if (!_isInitialized || _plugin == null) return;
 
     try {
-      // The detect method is now synchronous (not async).
-      final hands = _plugin!.detect(
+      // Just feed the frame to the native pipeline. No waiting.
+      _plugin!.processFrame(
         image,
         _controller!.description.sensorOrientation,
       );
-      if (mounted) {
-        setState(() {
-          _landmarks = hands;
-        });
-      }
     } catch (e) {
-      debugPrint('Error detecting landmarks: $e');
-    } finally {
-      // Allow the next frame to be processed.
-      _isDetecting = false;
+      debugPrint('Error processing frame: $e');
     }
   }
 
@@ -132,16 +122,22 @@ class _HandTrackerViewState extends State<HandTrackerView> {
           child: Stack(
             children: [
               CameraPreview(controller),
-              CustomPaint(
-                // Tell the painter to fill the available space
-                size: Size.infinite,
-                painter: LandmarkPainter(
-                  hands: _landmarks,
-                  // Pass the camera's resolution explicitly
-                  previewSize: previewSize,
-                  lensDirection: controller.description.lensDirection,
-                  sensorOrientation: controller.description.sensorOrientation,
-                ),
+              StreamBuilder<List<Hand>>(
+                stream: _plugin!.landmarkStream,
+                initialData: const [],
+                builder: (context, snapshot) {
+                  final hands = snapshot.data ?? [];
+                  return CustomPaint(
+                    size: Size.infinite,
+                    painter: LandmarkPainter(
+                      hands: hands, // Use the stream data
+                      previewSize: previewSize,
+                      lensDirection: controller.description.lensDirection,
+                      sensorOrientation:
+                          controller.description.sensorOrientation,
+                    ),
+                  );
+                },
               ),
             ],
           ),

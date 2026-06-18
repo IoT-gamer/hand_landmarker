@@ -29,34 +29,34 @@ packages:
     dependency: transitive
     description:
       name: camera
-      sha256: eefad89f262a873f38d21e5eec853461737ea074d7c9ede39f3ceb135d201cab
+      sha256: "034c38cb8014d29698dcae6d20276688a1bf74e6487dfeb274d70ea05d5f7777"
       url: "https://pub.dev"
     source: hosted
-    version: "0.11.3"
+    version: "0.12.0+1"
   camera_android_camerax:
     dependency: transitive
     description:
       name: camera_android_camerax
-      sha256: b68b638e5e0ede21155e670493ac568981a8f56c5f636d720935a916a1c5a0ef
+      sha256: b5064cf25a2787d122d0bf12e77c7b1033a2b983d0730e3091f770ee376efde5
       url: "https://pub.dev"
     source: hosted
-    version: "0.6.24"
+    version: "0.7.2"
   camera_avfoundation:
     dependency: transitive
     description:
       name: camera_avfoundation
-      sha256: "71dacf6c30aee386617c2b72ad46517706f8ef625aa637313c0d4dc93ddd8d76"
+      sha256: "90e4cc3fde331581a3b2d35d83be41dbb7393af0ab857eb27b732174289cb96d"
       url: "https://pub.dev"
     source: hosted
-    version: "0.9.20+1"
+    version: "0.10.1"
   camera_platform_interface:
     dependency: transitive
     description:
       name: camera_platform_interface
-      sha256: ea1ef6ba79cdbed93df2d3eeef11542a90dec24dbcd9cde574926b86d7a09a10
+      sha256: "7ac852d77699acee79f0d438b793feee26721841e50973576419ff5c6d95e9b7"
       url: "https://pub.dev"
     source: hosted
-    version: "2.11.0"
+    version: "2.13.0"
   camera_web:
     dependency: transitive
     description:
@@ -176,7 +176,7 @@ packages:
       path: ".."
       relative: true
     source: path
-    version: "2.2.0"
+    version: "2.3.0"
   integration_test:
     dependency: "direct dev"
     description: flutter

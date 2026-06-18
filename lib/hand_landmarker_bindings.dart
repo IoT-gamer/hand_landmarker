@@ -73,6 +73,55 @@ extension type MyHandLandmarker._(jni$_.JObject _$this)
 }
 
 extension MyHandLandmarker$$Methods on MyHandLandmarker {
+  static final _id_get$listener = MyHandLandmarker._class.instanceMethodId(
+    r'getListener',
+    r'()Lio/github/iot_gamer/hand_landmarker/HandLandmarkListener;',
+  );
+
+  static final _get$listener = jni$_.ProtectedJniExtensions.lookup<
+          jni$_.NativeFunction<
+              jni$_.JniResult Function(
+                jni$_.Pointer<jni$_.Void>,
+                jni$_.JMethodIDPtr,
+              )>>('globalEnv_CallObjectMethod')
+      .asFunction<
+          jni$_.JniResult Function(
+            jni$_.Pointer<jni$_.Void>,
+            jni$_.JMethodIDPtr,
+          )>();
+
+  /// from: `public final io.github.iot_gamer.hand_landmarker.HandLandmarkListener getListener()`
+  /// The returned object must be released after use, by calling the [release] method.
+  jni$_.JObject? get listener {
+    return _get$listener(reference.pointer, _id_get$listener.pointer)
+        .object<jni$_.JObject?>();
+  }
+
+  static final _id_set$listener = MyHandLandmarker._class.instanceMethodId(
+    r'setListener',
+    r'(Lio/github/iot_gamer/hand_landmarker/HandLandmarkListener;)V',
+  );
+
+  static final _set$listener = jni$_.ProtectedJniExtensions.lookup<
+              jni$_.NativeFunction<
+                  jni$_.JThrowablePtr Function(
+                      jni$_.Pointer<jni$_.Void>,
+                      jni$_.JMethodIDPtr,
+                      jni$_.VarArgs<(jni$_.Pointer<jni$_.Void>,)>)>>(
+          'globalEnv_CallVoidMethod')
+      .asFunction<
+          jni$_.JThrowablePtr Function(jni$_.Pointer<jni$_.Void>,
+              jni$_.JMethodIDPtr, jni$_.Pointer<jni$_.Void>)>();
+
+  /// from: `public final void setListener(io.github.iot_gamer.hand_landmarker.HandLandmarkListener handLandmarkListener)`
+  set listener(jni$_.JObject? handLandmarkListener) {
+    final _$handLandmarkListener =
+        handLandmarkListener?.reference ?? jni$_.jNullReference;
+    _set$listener(reference.pointer, _id_set$listener.pointer,
+            _$handLandmarkListener.pointer)
+        .check();
+  }
+
   static final _id_initialize = MyHandLandmarker._class.instanceMethodId(
     r'initialize',
     r'(IFZ)V',
@@ -97,6 +146,76 @@ extension MyHandLandmarker$$Methods on MyHandLandmarker {
     core$_.bool z,
   ) {
     _initialize(reference.pointer, _id_initialize.pointer, i, f, z ? 1 : 0)
+        .check();
+  }
+
+  static final _id_processFrame = MyHandLandmarker._class.instanceMethodId(
+    r'processFrame',
+    r'(Ljava/nio/ByteBuffer;Ljava/nio/ByteBuffer;Ljava/nio/ByteBuffer;IIIIIIJ)V',
+  );
+
+  static final _processFrame = jni$_.ProtectedJniExtensions.lookup<
+          jni$_.NativeFunction<
+              jni$_.JThrowablePtr Function(
+                  jni$_.Pointer<jni$_.Void>,
+                  jni$_.JMethodIDPtr,
+                  jni$_.VarArgs<
+                      (
+                        jni$_.Pointer<jni$_.Void>,
+                        jni$_.Pointer<jni$_.Void>,
+                        jni$_.Pointer<jni$_.Void>,
+                        jni$_.Int32,
+                        jni$_.Int32,
+                        jni$_.Int32,
+                        jni$_.Int32,
+                        jni$_.Int32,
+                        jni$_.Int32,
+                        jni$_.Int64
+                      )>)>>('globalEnv_CallVoidMethod')
+      .asFunction<
+          jni$_.JThrowablePtr Function(
+              jni$_.Pointer<jni$_.Void>,
+              jni$_.JMethodIDPtr,
+              jni$_.Pointer<jni$_.Void>,
+              jni$_.Pointer<jni$_.Void>,
+              jni$_.Pointer<jni$_.Void>,
+              core$_.int,
+              core$_.int,
+              core$_.int,
+              core$_.int,
+              core$_.int,
+              core$_.int,
+              core$_.int)>();
+
+  /// from: `public fun processFrame(yBuffer: java.nio.ByteBuffer, uBuffer: java.nio.ByteBuffer, vBuffer: java.nio.ByteBuffer, width: kotlin.Int, height: kotlin.Int, yRowStride: kotlin.Int, uvRowStride: kotlin.Int, uvPixelStride: kotlin.Int, rotation: kotlin.Int, timestampMs: kotlin.Long): kotlin.Unit`
+  void processFrame(
+    jni$_.JByteBuffer byteBuffer,
+    jni$_.JByteBuffer byteBuffer1,
+    jni$_.JByteBuffer byteBuffer2,
+    core$_.int i,
+    core$_.int i1,
+    core$_.int i2,
+    core$_.int i3,
+    core$_.int i4,
+    core$_.int i5,
+    core$_.int j,
+  ) {
+    final _$byteBuffer = byteBuffer.reference;
+    final _$byteBuffer1 = byteBuffer1.reference;
+    final _$byteBuffer2 = byteBuffer2.reference;
+    _processFrame(
+            reference.pointer,
+            _id_processFrame.pointer,
+            _$byteBuffer.pointer,
+            _$byteBuffer1.pointer,
+            _$byteBuffer2.pointer,
+            i,
+            i1,
+            i2,
+            i3,
+            i4,
+            i5,
+            j)
         .check();
   }
 
