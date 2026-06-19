@@ -2,6 +2,19 @@
 
 All notable changes to this project will be documented in this file.
 
+## **3.0.0 - 2026-06-19**
+
+### **💥 Breaking Changes**
+
+* **Asynchronous Streaming API**: The synchronous `detect()` method has been completely removed from the Dart API. 
+    * **Action Required**: Consumers must now use the non-blocking, fire-and-forget `processFrame()` method to pass camera frames, and listen to the new `landmarkStream` to receive hand tracking data asynchronously.
+
+### **⚡ Performance Enhancements**
+
+* **Zero-Blocking Inference**: Transitioned the core MediaPipe architecture from `IMAGE` mode to `LIVE_STREAM` mode. Inference now runs entirely on a native background worker thread, completely eliminating Flutter UI jank and dropped frames.
+* **Direct YUV to ARGB Conversion**: Replaced the expensive YUV -> NV21 -> JPEG -> Bitmap conversion pipeline with a direct YUV to ARGB8888 Bitmap conversion using fast integer math. This drastically reduces CPU load and memory allocations on every camera frame.
+* **Optimized Native Bridging**: Implemented a Kotlin `companion object` to capture background results and route them directly to a standard Flutter `EventChannel`, bypassing complex JNI callback mapping and keeping the bridge lightweight.
+
 ## **2.3.0 - 2026-06-17**
 
 ### **🛠️ Maintenance & Dependencies**
