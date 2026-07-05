@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
+## **3.0.1 - 2026-07-05**
+
+### **🛠️ Maintenance**
+
+* Updates minimum supported SDK version to Flutter 3.44/Dart 3.12.
+* Migrates to built-in Kotlin
+
 ## **3.0.0 - 2026-06-19**
 
 ### **💥 Breaking Changes**

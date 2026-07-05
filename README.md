@@ -30,7 +30,7 @@ The plugin follows a highly efficient architecture that minimizes cross-language
 
 ### Prerequisites
 
-* Flutter SDK
+* Flutter SDK 3.44 or higher
 * Java Development Kit (JDK) 17 or higher  
 * An Android device or emulator
 
@@ -40,7 +40,7 @@ Add the following dependencies to your app's `pubspec.yaml` file:
 
 ```yaml
 dependencies:  
-  hand_landmarker: ^3.0.0 # Use the latest version
+  hand_landmarker: ^3.0.1 # Use the latest version
 ```
 
 Then, run `flutter pub get`.
