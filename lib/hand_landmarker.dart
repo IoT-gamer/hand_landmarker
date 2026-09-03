@@ -33,8 +33,9 @@ class HandLandmarkerPlugin {
   final MyHandLandmarker _landmarker;
 
   /// Standard Flutter EventChannel for receiving the async JSON stream
-  static const EventChannel _eventChannel =
-      EventChannel('hand_landmarker/events');
+  static const EventChannel _eventChannel = EventChannel(
+    'hand_landmarker/events',
+  );
   Stream<List<Hand>>? _landmarkStream;
 
   /// Private constructor to force initialization via the `create` method.
@@ -49,7 +50,7 @@ class HandLandmarkerPlugin {
     // Create the native MyHandLandmarker object.
     final contextObj = androidApplicationContext;
 
-    final landmarker = MyHandLandmarker(contextObj);
+    final landmarker = MyHandLandmarker(contextObj as Context);
 
     // Initialize the native landmarker with the provided options.
     landmarker.initialize(
